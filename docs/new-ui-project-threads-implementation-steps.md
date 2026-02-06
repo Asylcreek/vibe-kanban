@@ -6,16 +6,16 @@
 - If paused, resume from first unchecked item.
 
 ## Phase 0: Alignment + Guardrails
-- [ ] Confirm this scope stays limited to `/new-ui`.
-- [ ] Confirm default thread mode is `in_place`.
-- [ ] Confirm concurrent execution remains enabled.
-- [ ] Confirm each project has exactly one repo (validate in code path).
+- [x] Confirm this scope stays limited to `/new-ui`.
+- [x] Confirm default thread mode is `in_place`.
+- [x] Confirm concurrent execution remains enabled.
+- [x] Confirm each project has exactly one repo (validate in code path).
 
 ## Phase 1: Data Layer
-- [ ] Add migrations for `chat_threads` and `chat_thread_bindings`.
-- [ ] Add DB models in `crates/db/src/models/` for new tables.
-- [ ] Add model methods: create/list/update thread, get/save bindings.
-- [ ] Add TS exports via type generator and run `pnpm run generate-types`.
+- [x] Add migrations for `chat_threads` and `chat_thread_bindings`.
+- [x] Add DB models in `crates/db/src/models/` for new tables.
+- [x] Add model methods: create/list/update thread, get/save bindings.
+- [x] Add TS exports via type generator and run `pnpm run generate-types`.
 
 Deliverable:
 - Persistent project-scoped threads with execution-mode metadata.
