@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use anyhow;
 use axum::{
     Json, Router,
@@ -17,9 +19,11 @@ use db::models::{
     execution_process::{ExecutionProcess, ExecutionProcessRunReason},
     project::Project,
     project_repo::ProjectRepo,
+    repo::Repo,
     session::{CreateSession, Session, SessionError},
-    workspace::{Workspace, WorkspaceError},
-    workspace_repo::WorkspaceRepo,
+    task::{CreateTask, Task, TaskStatus},
+    workspace::{CreateWorkspace, Workspace},
+    workspace_repo::{CreateWorkspaceRepo, WorkspaceRepo},
 };
 use deployment::Deployment;
 use executors::{
@@ -31,11 +35,15 @@ use executors::{
 use futures_util::{SinkExt, StreamExt, TryStreamExt};
 use serde::Deserialize;
 use services::services::container::ContainerService;
+use sqlx::FromRow;
 use ts_rs::TS;
 use utils::response::ApiResponse;
 use uuid::Uuid;
 
 use crate::{DeploymentImpl, error::ApiError};
+
+const NEW_UI_SHARED_TASK_PREFIX: &str = "[new-ui shared] ";
+const NEW_UI_SHARED_WORKSPACE_BRANCH: &str = "new-ui-in-place";
 
 #[derive(Debug, Deserialize, TS)]
 pub struct CreateThreadRequest {
@@ -52,6 +60,11 @@ pub struct SendThreadMessageRequest {
     pub perform_git_reset: Option<bool>,
 }
 
+#[derive(Debug, FromRow)]
+struct WorkspaceLookup {
+    workspace_id: Uuid,
+}
+
 async fn ensure_project_is_single_repo(
     pool: &sqlx::SqlitePool,
     project_id: Uuid,
@@ -65,16 +78,184 @@ async fn ensure_project_is_single_repo(
     Ok(())
 }
 
+fn workspace_agent_working_dir_for_repos(repos: &[Repo]) -> Option<String> {
+    if repos.len() != 1 {
+        return None;
+    }
+
+    let repo = &repos[0];
+    match repo.default_working_dir.as_ref().filter(|s| !s.is_empty()) {
+        Some(subdir) => Some(
+            PathBuf::from(&repo.name)
+                .join(subdir)
+                .to_string_lossy()
+                .to_string(),
+        ),
+        None => Some(repo.name.clone()),
+    }
+}
+
+fn target_branch_for_repo(deployment: &DeploymentImpl, repo: &Repo) -> String {
+    repo.default_target_branch
+        .clone()
+        .or_else(|| {
+            deployment
+                .git()
+                .get_head_info(&repo.path)
+                .ok()
+                .map(|h| h.branch)
+        })
+        .unwrap_or_else(|| "main".to_string())
+}
+
+pub async fn ensure_project_shared_workspace(
+    deployment: &DeploymentImpl,
+    project_id: Uuid,
+    project_name: &str,
+) -> Result<Workspace, ApiError> {
+    let pool = &deployment.db().pool;
+    let shared_task_title = format!("{}{}", NEW_UI_SHARED_TASK_PREFIX, project_name);
+
+    if let Some(row) = sqlx::query_as::<_, WorkspaceLookup>(
+        r#"SELECT w.id as workspace_id
+           FROM workspaces w
+           JOIN tasks t ON t.id = w.task_id
+           WHERE t.project_id = $1 AND t.title = $2
+           ORDER BY w.created_at ASC
+           LIMIT 1"#,
+    )
+    .bind(project_id)
+    .bind(&shared_task_title)
+    .fetch_optional(pool)
+    .await?
+    {
+        return Workspace::find_by_id(pool, row.workspace_id)
+            .await?
+            .ok_or_else(|| ApiError::BadRequest("Shared workspace not found".to_string()));
+    }
+
+    let repos = ProjectRepo::find_repos_for_project(pool, project_id).await?;
+    if repos.is_empty() {
+        return Err(ApiError::BadRequest(
+            "Project has no repositories".to_string(),
+        ));
+    }
+
+    let task = Task::create(
+        pool,
+        &CreateTask {
+            project_id,
+            title: shared_task_title,
+            description: Some("Internal shared workspace for /new-ui in-place threads".to_string()),
+            status: Some(TaskStatus::Todo),
+            parent_workspace_id: None,
+            image_ids: None,
+        },
+        Uuid::new_v4(),
+    )
+    .await?;
+
+    let workspace = Workspace::create(
+        pool,
+        &CreateWorkspace {
+            branch: NEW_UI_SHARED_WORKSPACE_BRANCH.to_string(),
+            agent_working_dir: workspace_agent_working_dir_for_repos(&repos),
+        },
+        Uuid::new_v4(),
+        task.id,
+    )
+    .await?;
+
+    let workspace_repos: Vec<CreateWorkspaceRepo> = repos
+        .iter()
+        .map(|repo| CreateWorkspaceRepo {
+            repo_id: repo.id,
+            target_branch: target_branch_for_repo(deployment, repo),
+        })
+        .collect();
+    WorkspaceRepo::create_many(pool, workspace.id, &workspace_repos).await?;
+
+    if repos.len() == 1
+        && let Some(parent) = repos[0].path.parent()
+    {
+        Workspace::update_container_ref(pool, workspace.id, &parent.to_string_lossy()).await?;
+    }
+
+    Workspace::find_by_id(pool, workspace.id)
+        .await?
+        .ok_or_else(|| ApiError::BadRequest("Failed to load shared workspace".to_string()))
+}
+
+async fn provision_isolated_workspace_for_thread(
+    deployment: &DeploymentImpl,
+    thread: &ChatThread,
+) -> Result<Workspace, ApiError> {
+    let pool = &deployment.db().pool;
+    let repos = ProjectRepo::find_repos_for_project(pool, thread.project_id).await?;
+
+    if repos.is_empty() {
+        return Err(ApiError::BadRequest(
+            "Project has no repositories".to_string(),
+        ));
+    }
+
+    let task_title = format!("[new-ui thread] {} ({})", thread.title, thread.id);
+    let task = Task::create(
+        pool,
+        &CreateTask {
+            project_id: thread.project_id,
+            title: task_title.clone(),
+            description: Some("Internal workspace for isolated /new-ui thread".to_string()),
+            status: Some(TaskStatus::Todo),
+            parent_workspace_id: None,
+            image_ids: None,
+        },
+        Uuid::new_v4(),
+    )
+    .await?;
+
+    let workspace_id = Uuid::new_v4();
+    let branch = deployment
+        .container()
+        .git_branch_from_workspace(&workspace_id, &task_title)
+        .await;
+
+    let workspace = Workspace::create(
+        pool,
+        &CreateWorkspace {
+            branch,
+            agent_working_dir: workspace_agent_working_dir_for_repos(&repos),
+        },
+        workspace_id,
+        task.id,
+    )
+    .await?;
+
+    let workspace_repos: Vec<CreateWorkspaceRepo> = repos
+        .iter()
+        .map(|repo| CreateWorkspaceRepo {
+            repo_id: repo.id,
+            target_branch: target_branch_for_repo(deployment, repo),
+        })
+        .collect();
+    WorkspaceRepo::create_many(pool, workspace.id, &workspace_repos).await?;
+
+    Workspace::find_by_id(pool, workspace.id)
+        .await?
+        .ok_or_else(|| ApiError::BadRequest("Failed to load isolated workspace".to_string()))
+}
+
 pub async fn list_threads(
     State(deployment): State<DeploymentImpl>,
     Path(project_id): Path<Uuid>,
 ) -> Result<ResponseJson<ApiResponse<Vec<ChatThread>>>, ApiError> {
     let pool = &deployment.db().pool;
-    let _project = Project::find_by_id(pool, project_id)
+    let project = Project::find_by_id(pool, project_id)
         .await?
         .ok_or_else(|| ApiError::BadRequest("Project not found".to_string()))?;
 
     ensure_project_is_single_repo(pool, project_id).await?;
+    let _ = ensure_project_shared_workspace(&deployment, project.id, &project.name).await?;
 
     let threads = ChatThread::find_by_project_id(pool, project_id).await?;
     Ok(ResponseJson(ApiResponse::success(threads)))
@@ -86,32 +267,42 @@ pub async fn create_thread(
     Json(payload): Json<CreateThreadRequest>,
 ) -> Result<ResponseJson<ApiResponse<ChatThread>>, ApiError> {
     let pool = &deployment.db().pool;
-    let _project = Project::find_by_id(pool, project_id)
+    let project = Project::find_by_id(pool, project_id)
         .await?
         .ok_or_else(|| ApiError::BadRequest("Project not found".to_string()))?;
 
     ensure_project_is_single_repo(pool, project_id).await?;
+
+    let execution_mode = payload
+        .execution_mode
+        .unwrap_or(ChatThreadExecutionMode::InPlace);
 
     let thread = ChatThread::create(
         pool,
         &CreateChatThread {
             project_id,
             title: payload.title,
-            execution_mode: payload
-                .execution_mode
-                .unwrap_or(ChatThreadExecutionMode::InPlace),
+            execution_mode: execution_mode.clone(),
         },
         Uuid::new_v4(),
     )
     .await?;
 
-    // Ensure there is always a binding row for the thread; phase 4 will populate workspace/session.
+    let workspace = match execution_mode {
+        ChatThreadExecutionMode::InPlace => {
+            ensure_project_shared_workspace(&deployment, project.id, &project.name).await?
+        }
+        ChatThreadExecutionMode::Isolated => {
+            provision_isolated_workspace_for_thread(&deployment, &thread).await?
+        }
+    };
+
     let _binding = ChatThreadBinding::upsert(
         pool,
         &UpsertChatThreadBinding {
             thread_id: thread.id,
             session_id: None,
-            workspace_id: None,
+            workspace_id: Some(workspace.id),
         },
     )
     .await?;
@@ -124,8 +315,61 @@ pub async fn update_thread(
     Path(thread_id): Path<Uuid>,
     Json(payload): Json<UpdateChatThread>,
 ) -> Result<ResponseJson<ApiResponse<ChatThread>>, ApiError> {
-    let updated = ChatThread::update(&deployment.db().pool, thread_id, &payload).await?;
+    let pool = &deployment.db().pool;
+    let existing = ChatThread::find_by_id(pool, thread_id)
+        .await?
+        .ok_or(ChatThreadError::NotFound)?;
+
+    if let Some(next_mode) = payload.execution_mode.clone()
+        && next_mode != existing.execution_mode
+    {
+        return Err(ApiError::BadRequest(
+            "Changing execution mode should be done by creating a new thread".to_string(),
+        ));
+    }
+
+    let updated = ChatThread::update(pool, thread_id, &payload).await?;
     Ok(ResponseJson(ApiResponse::success(updated)))
+}
+
+async fn resolve_thread_workspace(
+    deployment: &DeploymentImpl,
+    thread: &ChatThread,
+) -> Result<Workspace, ApiError> {
+    let pool = &deployment.db().pool;
+    let project = Project::find_by_id(pool, thread.project_id)
+        .await?
+        .ok_or_else(|| ApiError::BadRequest("Project not found".to_string()))?;
+
+    let existing_binding = ChatThreadBinding::find_by_thread_id(pool, thread.id).await?;
+
+    if let Some(binding) = &existing_binding
+        && let Some(workspace_id) = binding.workspace_id
+        && let Some(workspace) = Workspace::find_by_id(pool, workspace_id).await?
+    {
+        return Ok(workspace);
+    }
+
+    let workspace = match thread.execution_mode {
+        ChatThreadExecutionMode::InPlace => {
+            ensure_project_shared_workspace(deployment, project.id, &project.name).await?
+        }
+        ChatThreadExecutionMode::Isolated => {
+            provision_isolated_workspace_for_thread(deployment, thread).await?
+        }
+    };
+
+    ChatThreadBinding::upsert(
+        pool,
+        &UpsertChatThreadBinding {
+            thread_id: thread.id,
+            session_id: existing_binding.and_then(|b| b.session_id),
+            workspace_id: Some(workspace.id),
+        },
+    )
+    .await?;
+
+    Ok(workspace)
 }
 
 pub async fn send_message(
@@ -138,47 +382,28 @@ pub async fn send_message(
         .await?
         .ok_or(ChatThreadError::NotFound)?;
 
-    match thread.execution_mode {
-        ChatThreadExecutionMode::InPlace => Err(ApiError::BadRequest(
-            "in_place execution mode is not wired yet (Phase 3)".to_string(),
-        )),
-        ChatThreadExecutionMode::Isolated => {
-            send_message_isolated(&deployment, &thread, payload).await
-        }
-    }
-}
-
-async fn send_message_isolated(
-    deployment: &DeploymentImpl,
-    thread: &ChatThread,
-    payload: SendThreadMessageRequest,
-) -> Result<ResponseJson<ApiResponse<ExecutionProcess>>, ApiError> {
-    let pool = &deployment.db().pool;
     ensure_project_is_single_repo(pool, thread.project_id).await?;
+
+    if matches!(thread.execution_mode, ChatThreadExecutionMode::InPlace)
+        && payload.retry_process_id.is_some()
+    {
+        return Err(ApiError::BadRequest(
+            "Retry/reset is not supported for in_place threads yet".to_string(),
+        ));
+    }
+
+    let workspace = resolve_thread_workspace(&deployment, &thread).await?;
+
+    if matches!(thread.execution_mode, ChatThreadExecutionMode::Isolated) {
+        deployment
+            .container()
+            .ensure_container_exists(&workspace)
+            .await?;
+    }
 
     let binding = ChatThreadBinding::find_by_thread_id(pool, thread.id)
         .await?
-        .ok_or_else(|| {
-            ApiError::BadRequest("Thread binding is missing for isolated execution".to_string())
-        })?;
-
-    let workspace_id = binding.workspace_id.ok_or_else(|| {
-        ApiError::BadRequest(
-            "Thread is isolated but has no workspace bound yet (Phase 4 will provision this)"
-                .to_string(),
-        )
-    })?;
-
-    let workspace = Workspace::find_by_id(pool, workspace_id)
-        .await?
-        .ok_or(ApiError::Workspace(WorkspaceError::ValidationError(
-            "Workspace not found".to_string(),
-        )))?;
-
-    deployment
-        .container()
-        .ensure_container_exists(&workspace)
-        .await?;
+        .ok_or_else(|| ApiError::BadRequest("Thread binding is missing".to_string()))?;
 
     let session = match binding.session_id {
         Some(session_id) => Session::find_by_id(pool, session_id)
@@ -335,13 +560,13 @@ async fn handle_thread_execution_processes_ws(
 pub fn router() -> Router<DeploymentImpl> {
     Router::new()
         .route(
-            "/projects/{project_id}/threads",
+            "/new-ui/projects/{project_id}/threads",
             get(list_threads).post(create_thread),
         )
-        .route("/threads/{thread_id}", patch(update_thread))
-        .route("/threads/{thread_id}/messages", post(send_message))
+        .route("/new-ui/threads/{thread_id}", patch(update_thread))
+        .route("/new-ui/threads/{thread_id}/messages", post(send_message))
         .route(
-            "/threads/{thread_id}/processes/stream/ws",
+            "/new-ui/threads/{thread_id}/processes/stream/ws",
             get(stream_thread_execution_processes_ws),
         )
 }

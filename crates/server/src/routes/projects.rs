@@ -23,6 +23,7 @@ use services::services::{file_search::SearchQuery, project::ProjectServiceError}
 use utils::response::ApiResponse;
 use uuid::Uuid;
 
+use crate::routes::new_ui::ensure_project_shared_workspace;
 use crate::{DeploymentImpl, error::ApiError, middleware::load_project_middleware};
 
 pub async fn get_projects(
@@ -93,6 +94,17 @@ pub async fn create_project(
         .await
     {
         Ok(project) => {
+            if let Err(err) =
+                ensure_project_shared_workspace(&deployment, project.id, &project.name).await
+            {
+                tracing::error!(
+                    "Failed to create shared /new-ui workspace for project {}: {}",
+                    project.id,
+                    err
+                );
+                return Err(err);
+            }
+
             // Track project creation event
             deployment
                 .track_if_analytics_allowed(
