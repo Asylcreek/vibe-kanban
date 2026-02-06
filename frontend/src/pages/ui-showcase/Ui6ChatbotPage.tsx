@@ -59,6 +59,7 @@ interface Ui6Chat {
 }
 
 const DROID_EXECUTOR = BaseCodingAgent.DROID;
+const DEFAULT_THREAD_TITLE = 'New thread';
 const NEW_UI_THREAD_PREFS_KEY = 'new_ui_thread_executor_prefs_v1';
 const NEW_UI_DRAFT_PREFS_KEY = 'new_ui_draft_executor_prefs_v1';
 
@@ -133,6 +134,21 @@ function writeDraftPrefs(prefs: ExecutorPrefs) {
 function assistantInitial(label: string): string {
   const trimmed = label.trim();
   return trimmed.length > 0 ? trimmed[0]!.toUpperCase() : 'A';
+}
+
+function titleFromAssistantResponse(text: string): string | null {
+  const normalized = text
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/[#>*_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!normalized) return null;
+  const firstSentence = normalized.split(/[.!?]/)[0]?.trim() ?? normalized;
+  const candidate = (firstSentence || normalized).trim();
+  if (!candidate) return null;
+  return candidate.length > 60 ? `${candidate.slice(0, 57).trim()}...` : candidate;
 }
 
 function executorDisplayName(executor: BaseCodingAgent | null): string {
@@ -1031,6 +1047,67 @@ export function Ui6ChatbotPage() {
     }
   }, []);
 
+  const maybeGenerateThreadTitle = useCallback(async (
+    threadId: string,
+    projectId: string,
+    assistantText: string
+  ) => {
+    const generatedTitle = titleFromAssistantResponse(assistantText);
+    if (!generatedTitle) return;
+
+    let shouldRename = false;
+    setChats((prev) =>
+      prev.map((chat) => {
+        if (chat.id !== threadId) return chat;
+        if (chat.title !== DEFAULT_THREAD_TITLE) return chat;
+        shouldRename = true;
+        return {
+          ...chat,
+          title: generatedTitle,
+          updatedAt: new Date(),
+        };
+      })
+    );
+
+    if (!shouldRename) {
+      return;
+    }
+
+    try {
+      const updated = await newUiApi.updateThread(threadId, {
+        title: generatedTitle,
+        execution_mode: null,
+      });
+
+      setChats((prev) =>
+        prev.map((chat) =>
+          chat.id === updated.id
+            ? {
+                ...chat,
+                title: updated.title,
+                updatedAt: new Date(updated.updated_at),
+              }
+            : chat
+        )
+      );
+
+      setProjectThreadsById((prev) => ({
+        ...prev,
+        [projectId]: (prev[projectId] ?? []).map((thread) =>
+          thread.id === updated.id
+            ? {
+                ...thread,
+                title: updated.title,
+                updated_at: new Date(updated.updated_at),
+              }
+            : thread
+        ),
+      }));
+    } catch {
+      // Non-blocking: keep optimistic title if update fails.
+    }
+  }, []);
+
   const finalizeAssistantMessageText = useCallback((
     process: ExecutionProcess,
     fallbackText: string
@@ -1047,7 +1124,11 @@ export function Ui6ChatbotPage() {
     return fallbackText || 'Completed.';
   }, []);
 
-  const attachProcessStream = useCallback((threadId: string, processId: string) => {
+  const attachProcessStream = useCallback((
+    threadId: string,
+    processId: string,
+    projectId: string
+  ) => {
     const assistantMessageId = `${processId}-assistant`;
     activeStreamRef.current?.close();
     activeStreamRef.current = null;
@@ -1077,12 +1158,18 @@ export function Ui6ChatbotPage() {
                 assistantText
               );
               setAssistantMessage(threadId, assistantMessageId, finalText);
-              return persistAssistantMessage(threadId, processId, finalText);
+              return Promise.all([
+                persistAssistantMessage(threadId, processId, finalText),
+                maybeGenerateThreadTitle(threadId, projectId, finalText),
+              ]);
             })
             .catch(() => {
               const fallback = assistantText || 'Completed.';
               setAssistantMessage(threadId, assistantMessageId, fallback);
-              return persistAssistantMessage(threadId, processId, fallback);
+              return Promise.all([
+                persistAssistantMessage(threadId, processId, fallback),
+                maybeGenerateThreadTitle(threadId, projectId, fallback),
+              ]);
             })
             .finally(() => {
               setIsTyping(false);
@@ -1100,7 +1187,12 @@ export function Ui6ChatbotPage() {
         },
       }
     );
-  }, [finalizeAssistantMessageText, persistAssistantMessage, setAssistantMessage]);
+  }, [
+    finalizeAssistantMessageText,
+    maybeGenerateThreadTitle,
+    persistAssistantMessage,
+    setAssistantMessage,
+  ]);
 
   useEffect(() => {
     const threadId = currentChat?.id;
@@ -1125,7 +1217,7 @@ export function Ui6ChatbotPage() {
         ) {
           return;
         }
-        attachProcessStream(threadId, activeProcess.id);
+        attachProcessStream(threadId, activeProcess.id, projectId);
       } catch {
         // Non-fatal: thread remains usable without reconnect.
       }
@@ -1206,7 +1298,7 @@ export function Ui6ChatbotPage() {
         force_when_dirty: null,
         perform_git_reset: null,
       });
-      attachProcessStream(chat.id, process.id);
+      attachProcessStream(chat.id, process.id, chat.projectId);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unknown backend error';
@@ -1231,10 +1323,8 @@ export function Ui6ChatbotPage() {
       };
 
       void (async () => {
-        const title =
-          trimmed.slice(0, 50) + (trimmed.length > 50 ? '...' : '');
         const createdThread = await newUiApi.createThread(activeProjectId, {
-          title,
+          title: DEFAULT_THREAD_TITLE,
           execution_mode: 'in_place',
         });
         const thread: ProjectThread = {
@@ -1364,7 +1454,7 @@ export function Ui6ChatbotPage() {
 
   const handleCreateThread = async (projectId: string) => {
     const createdThread = await newUiApi.createThread(projectId, {
-      title: 'New thread',
+      title: DEFAULT_THREAD_TITLE,
       execution_mode: 'in_place',
     });
     const thread: ProjectThread = {
