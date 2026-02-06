@@ -31,9 +31,9 @@ Deliverable:
 - New API surface for `/new-ui` thread CRUD + send.
 
 ## Phase 3: In-Place Execution Mode
-- [ ] Add execution path that runs in project repo root without worktree creation.
-- [ ] Reuse existing executor spawn, approvals, logging, and process persistence.
-- [ ] Ensure env vars remain populated (project/thread/session/process context).
+- [x] Add execution path that runs in project repo root without worktree creation.
+- [x] Reuse existing executor spawn, approvals, logging, and process persistence.
+- [x] Ensure env vars remain populated (project/thread/session/process context).
 - [ ] Ensure no workspace-dependent code path is required for in-place mode.
 - [ ] Add tests for in-place send lifecycle.
 
@@ -41,22 +41,27 @@ Deliverable:
 - Backend can run coding agents directly in project repo path.
 
 ## Phase 4: Isolated Mode Integration
-- [ ] Reuse existing workspace creation + session flow for isolated threads.
-- [ ] Persist resulting `workspace_id`/`session_id` in thread binding.
-- [ ] Ensure thread-level mode switching updates routing behavior.
+- [x] Reuse existing workspace creation + session flow for isolated threads.
+- [x] Persist resulting `workspace_id`/`session_id` in thread binding.
+- [x] Ensure thread-level mode switching updates routing behavior.
 - [ ] Add tests covering both modes.
 
 Deliverable:
 - Thread mode toggle correctly selects in-place vs isolated execution.
 
+## Decision Notes
+- [x] Shared workspace is created at project creation time and reused by all `in_place` threads.
+- [x] `isolated` threads provision and bind a dedicated workspace.
+- [x] Switching thread mode is disallowed; users should create a new thread for a different mode.
+
 ## Phase 5: `/new-ui` Frontend Refactor
-- [ ] Replace workspace bootstrap logic in `Ui6ChatbotPage`.
-- [ ] Add project-scoped thread list sourced from new APIs.
-- [ ] Add thread create/select UX.
+- [x] Replace workspace bootstrap logic in `Ui6ChatbotPage`.
+- [x] Add project-scoped thread list sourced from new APIs.
+- [x] Add thread create/select UX.
 - [ ] Add thread mode toggle (default `in_place`).
-- [ ] Wire send to new `/api/new-ui/threads/:id/messages`.
-- [ ] Keep agent/profile selectors.
-- [ ] Remove workspace-not-found messaging from `/new-ui`.
+- [x] Wire send to new `/api/new-ui/threads/:id/messages`.
+- [x] Keep agent/profile selectors.
+- [x] Remove workspace-not-found messaging from `/new-ui`.
 
 Deliverable:
 - `/new-ui` operates via project threads and can execute immediately.

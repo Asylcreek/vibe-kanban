@@ -23,10 +23,15 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { BaseCodingAgent, type PatchType, type Project } from 'shared/types';
+import {
+  BaseCodingAgent,
+  type ChatThreadExecutionMode,
+  type PatchType,
+  type Project,
+} from 'shared/types';
 import { useUserSystem } from '@/components/ConfigProvider';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { attemptsApi, projectsApi, sessionsApi } from '@/lib/api';
+import { newUiApi, projectsApi } from '@/lib/api';
 import { getVariantOptions } from '@/utils/executor';
 import { streamJsonPatchEntries } from '@/utils/streamJsonPatchEntries';
 
@@ -38,11 +43,11 @@ interface Ui6Message {
 }
 
 interface Ui6Chat {
-  id: string;
+  id: string; // backend thread id
+  projectId: string;
   title: string;
+  executionMode: ChatThreadExecutionMode;
   messages: Ui6Message[];
-  backendSessionId: string | null;
-  sessionExecutor: BaseCodingAgent | null;
   selectedExecutor: BaseCodingAgent | null;
   selectedVariant: string | null;
   createdAt: Date;
@@ -50,21 +55,6 @@ interface Ui6Chat {
 }
 
 const DROID_EXECUTOR = BaseCodingAgent.DROID;
-const HARDCODED_TEST_WORKSPACE_ID = 'bc3fc146-8308-4812-b670-dc2a6ee9c978';
-
-async function pickWorkspaceId(): Promise<string | null> {
-  try {
-    const preferred = await attemptsApi.get(HARDCODED_TEST_WORKSPACE_ID);
-    return preferred.id;
-  } catch {
-    // Ignore; fallback to first available workspace below.
-  }
-
-  const workspaces = await attemptsApi.getAllWorkspaces();
-  const firstWorkspace =
-    workspaces.find((workspace) => !workspace.archived) ?? workspaces[0];
-  return firstWorkspace?.id ?? null;
-}
 
 function extractAssistantText(entries: PatchType[]): string {
   return entries
@@ -522,6 +512,8 @@ function Ui6RightSidebar({
 interface ProjectThread {
   id: string;
   title: string;
+  execution_mode: ChatThreadExecutionMode;
+  updated_at: Date;
 }
 
 export function Ui6ChatbotPage() {
@@ -533,10 +525,7 @@ export function Ui6ChatbotPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [chats, setChats] = useState<Ui6Chat[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
-  const [workspaceStatus, setWorkspaceStatus] = useState(
-    'Loading workspace...'
-  );
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] =
     useState(false);
   const [createProjectName, setCreateProjectName] = useState('');
@@ -549,6 +538,9 @@ export function Ui6ChatbotPage() {
     string | null
   >(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [projectThreadsById, setProjectThreadsById] = useState<
+    Record<string, ProjectThread[]>
+  >({});
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [projectsError, setProjectsError] = useState<string | null>(null);
   const [expandedProjects, setExpandedProjects] = useState<
@@ -603,14 +595,6 @@ export function Ui6ChatbotPage() {
     }
     return variantOptions[0] ?? null;
   }, [composerVariant, variantOptions]);
-  const projectThreadsById = useMemo<Record<string, ProjectThread[]>>(
-    () =>
-      Object.fromEntries(
-        projects.map((project) => [project.id, [] as ProjectThread[]])
-      ),
-    [projects]
-  );
-
   useEffect(() => {
     if (!draftExecutor) {
       setDraftExecutor(fallbackExecutor);
@@ -624,31 +608,7 @@ export function Ui6ChatbotPage() {
   }, [draftVariant, fallbackVariant]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    const loadWorkspace = async () => {
-      try {
-        const preferredWorkspaceId = await pickWorkspaceId();
-
-        if (cancelled) return;
-
-        if (!preferredWorkspaceId) {
-          setWorkspaceStatus('No workspace found. Create one at /workspaces/create.');
-          return;
-        }
-
-        setWorkspaceId(preferredWorkspaceId);
-        setWorkspaceStatus(`Workspace ${preferredWorkspaceId.slice(0, 8)}`);
-      } catch {
-        if (cancelled) return;
-        setWorkspaceStatus('Failed to load workspaces.');
-      }
-    };
-
-    void loadWorkspace();
-
     return () => {
-      cancelled = true;
       activeStreamRef.current?.close();
       activeStreamRef.current = null;
     };
@@ -726,25 +686,40 @@ export function Ui6ChatbotPage() {
     document.body.style.cursor = 'col-resize';
   };
 
-  const createChat = (title = 'New Chat', initialMessages: Ui6Message[] = []) => {
+  const upsertChatFromThread = (
+    projectId: string,
+    thread: ProjectThread,
+    initialMessages: Ui6Message[] = []
+  ) => {
     const now = new Date();
     const defaultExecutor = fallbackExecutor;
     const defaultVariant = getVariantOptions(defaultExecutor, profiles)[0] ?? null;
-    const newChat: Ui6Chat = {
-      id: `${Date.now()}`,
-      title,
-      messages: initialMessages,
-      backendSessionId: null,
-      sessionExecutor: null,
-      selectedExecutor: defaultExecutor,
-      selectedVariant: defaultVariant,
-      createdAt: now,
-      updatedAt: now,
-    };
 
-    setChats((prev) => [newChat, ...prev]);
-    setCurrentChatId(newChat.id);
-    return newChat;
+    let chatToUse: Ui6Chat;
+    setChats((prev) => {
+      const existing = prev.find((chat) => chat.id === thread.id);
+      if (existing) {
+        chatToUse = existing;
+        return prev;
+      }
+
+      const created: Ui6Chat = {
+        id: thread.id,
+        projectId,
+        title: thread.title,
+        executionMode: thread.execution_mode,
+        messages: initialMessages,
+        selectedExecutor: defaultExecutor,
+        selectedVariant: defaultVariant,
+        createdAt: now,
+        updatedAt: now,
+      };
+      chatToUse = created;
+      return [created, ...prev];
+    });
+
+    setCurrentChatId(thread.id);
+    return chatToUse!;
   };
 
   const setAssistantMessage = (
@@ -789,6 +764,9 @@ export function Ui6ChatbotPage() {
     try {
       const loadedProjects = await projectsApi.list();
       setProjects(loadedProjects);
+      if (!activeProjectId && loadedProjects.length > 0) {
+        setActiveProjectId(loadedProjects[0].id);
+      }
       setExpandedProjects((prev) => {
         const next = { ...prev };
         loadedProjects.forEach((project) => {
@@ -798,6 +776,20 @@ export function Ui6ChatbotPage() {
         });
         return next;
       });
+
+      const threadEntries = await Promise.all(
+        loadedProjects.map(async (project) => {
+          const threads = await newUiApi.listThreads(project.id);
+          const mapped = threads.map((thread) => ({
+            id: thread.id,
+            title: thread.title,
+            execution_mode: thread.execution_mode,
+            updated_at: new Date(thread.updated_at),
+          }));
+          return [project.id, mapped] as const;
+        })
+      );
+      setProjectThreadsById(Object.fromEntries(threadEntries));
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to load projects.';
@@ -807,49 +799,18 @@ export function Ui6ChatbotPage() {
     }
   };
 
-  const resolveWorkspaceId = async (): Promise<string | null> => {
-    if (workspaceId) return workspaceId;
-
-    try {
-      const preferredWorkspaceId = await pickWorkspaceId();
-
-      if (!preferredWorkspaceId) {
-        setWorkspaceStatus('No workspace found. Create one at /workspaces/create.');
-        return null;
-      }
-
-      setWorkspaceId(preferredWorkspaceId);
-      setWorkspaceStatus(`Workspace ${preferredWorkspaceId.slice(0, 8)}`);
-      return preferredWorkspaceId;
-    } catch {
-      setWorkspaceStatus('Failed to load workspaces.');
-      return null;
-    }
-  };
-
   const sendToBackend = async (
-    chatId: string,
+    chat: Ui6Chat,
     prompt: string,
-    initialSessionId: string | null,
     selectedExecutor: BaseCodingAgent | null,
-    selectedVariant: string | null,
-    sessionExecutor: BaseCodingAgent | null
+    selectedVariant: string | null
   ) => {
     const assistantMessageId = `${Date.now()}-assistant`;
-    setAssistantMessage(chatId, assistantMessageId, 'Running...');
+    setAssistantMessage(chat.id, assistantMessageId, 'Running...');
 
-    const workspaceIdToUse = await resolveWorkspaceId();
-    if (!workspaceIdToUse) {
-      setAssistantMessage(
-        chatId,
-        assistantMessageId,
-        'No workspace available. Create one at /workspaces/create first.'
-      );
-      return;
-    }
     if (!selectedExecutor) {
       setAssistantMessage(
-        chatId,
+        chat.id,
         assistantMessageId,
         'No executor available. Configure an agent in Settings.'
       );
@@ -860,33 +821,7 @@ export function Ui6ChatbotPage() {
     activeStreamRef.current?.close();
 
     try {
-      let sessionId = initialSessionId;
-      const shouldCreateSession =
-        !sessionId || (sessionExecutor && sessionExecutor !== selectedExecutor);
-
-      if (shouldCreateSession) {
-        const session = await sessionsApi.create({
-          workspace_id: workspaceIdToUse,
-          executor: selectedExecutor,
-        });
-        sessionId = session.id;
-        setChats((prev) =>
-          prev.map((chat) =>
-            chat.id === chatId
-              ? {
-                  ...chat,
-                  backendSessionId: sessionId,
-                  sessionExecutor: selectedExecutor,
-                }
-              : chat
-          )
-        );
-      }
-      if (!sessionId) {
-        throw new Error('Failed to initialize session');
-      }
-
-      const process = await sessionsApi.followUp(sessionId, {
+      const process = await newUiApi.sendThreadMessage(chat.id, {
         prompt,
         executor_profile_id: {
           executor: selectedExecutor,
@@ -903,26 +838,22 @@ export function Ui6ChatbotPage() {
           onEntries: (entries) => {
             const assistantText = extractAssistantText(entries);
             if (assistantText) {
-              setAssistantMessage(chatId, assistantMessageId, assistantText);
+              setAssistantMessage(chat.id, assistantMessageId, assistantText);
             }
           },
           onFinished: (entries) => {
             const assistantText = extractAssistantText(entries);
             if (!assistantText) {
-              setAssistantMessage(
-                chatId,
-                assistantMessageId,
-                `Completed. Open /workspaces/${workspaceIdToUse} for full logs.`
-              );
+              setAssistantMessage(chat.id, assistantMessageId, 'Completed.');
             }
             setIsTyping(false);
             activeStreamRef.current = null;
           },
           onError: () => {
             setAssistantMessage(
-              chatId,
+              chat.id,
               assistantMessageId,
-              `Stream failed. Open /workspaces/${workspaceIdToUse} for live output.`
+              'Stream failed.'
             );
             setIsTyping(false);
             activeStreamRef.current = null;
@@ -932,7 +863,7 @@ export function Ui6ChatbotPage() {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unknown backend error';
-      setAssistantMessage(chatId, assistantMessageId, `Error: ${message}`);
+      setAssistantMessage(chat.id, assistantMessageId, `Error: ${message}`);
       setIsTyping(false);
     }
   };
@@ -942,39 +873,53 @@ export function Ui6ChatbotPage() {
     if (!trimmed) return;
 
     if (!currentChat) {
+      if (!activeProjectId) {
+        return;
+      }
       const userMessage: Ui6Message = {
         id: `${Date.now()}-user`,
         text: trimmed,
         isUser: true,
         timestamp: new Date(),
       };
-      const newChat = createChat(
-        trimmed.slice(0, 50) + (trimmed.length > 50 ? '...' : ''),
-        [userMessage]
-      );
-      const selectedExecutor =
-        draftExecutor ?? newChat.selectedExecutor ?? fallbackExecutor;
-      const selectedVariant =
-        draftVariant ?? newChat.selectedVariant ?? fallbackVariant;
-      setChats((prev) =>
-        prev.map((chat) =>
-          chat.id === newChat.id
-            ? {
-                ...chat,
-                selectedExecutor,
-                selectedVariant,
-              }
-            : chat
-        )
-      );
-      void sendToBackend(
-        newChat.id,
-        trimmed,
-        newChat.backendSessionId,
-        selectedExecutor,
-        selectedVariant,
-        newChat.sessionExecutor
-      );
+
+      void (async () => {
+        const title =
+          trimmed.slice(0, 50) + (trimmed.length > 50 ? '...' : '');
+        const createdThread = await newUiApi.createThread(activeProjectId, {
+          title,
+          execution_mode: 'in_place',
+        });
+        const thread: ProjectThread = {
+          id: createdThread.id,
+          title: createdThread.title,
+          execution_mode: createdThread.execution_mode,
+          updated_at: new Date(createdThread.updated_at),
+        };
+        setProjectThreadsById((prev) => ({
+          ...prev,
+          [activeProjectId]: [thread, ...(prev[activeProjectId] ?? [])],
+        }));
+        const newChat = upsertChatFromThread(activeProjectId, thread, [userMessage]);
+        const selectedExecutor =
+          draftExecutor ?? newChat.selectedExecutor ?? fallbackExecutor;
+        const selectedVariant =
+          draftVariant ?? newChat.selectedVariant ?? fallbackVariant;
+
+        setChats((prev) =>
+          prev.map((chat) =>
+            chat.id === newChat.id
+              ? {
+                  ...chat,
+                  selectedExecutor,
+                  selectedVariant,
+                }
+              : chat
+          )
+        );
+
+        await sendToBackend(newChat, trimmed, selectedExecutor, selectedVariant);
+      })();
       return;
     }
 
@@ -988,25 +933,47 @@ export function Ui6ChatbotPage() {
     setChats((prev) =>
       prev.map((chat) => {
         if (chat.id !== currentChat.id) return chat;
+        const nextTitle =
+          chat.messages.length === 0
+            ? trimmed.slice(0, 50) + (trimmed.length > 50 ? '...' : '')
+            : chat.title;
         return {
           ...chat,
-          title:
-            chat.messages.length === 0
-              ? trimmed.slice(0, 50) + (trimmed.length > 50 ? '...' : '')
-              : chat.title,
+          title: nextTitle,
           updatedAt: new Date(),
           messages: [...chat.messages, userMessage],
         };
       })
     );
 
+    if (currentChat.messages.length === 0 && currentChat.title !== trimmed) {
+      void newUiApi
+        .updateThread(currentChat.id, {
+          title: trimmed.slice(0, 50) + (trimmed.length > 50 ? '...' : ''),
+          execution_mode: null,
+        })
+        .then((thread) => {
+          setProjectThreadsById((prev) => ({
+            ...prev,
+            [currentChat.projectId]: (prev[currentChat.projectId] ?? []).map((item) =>
+              item.id === thread.id
+                ? {
+                    ...item,
+                    title: thread.title,
+                    updated_at: new Date(thread.updated_at),
+                  }
+                : item
+            ),
+          }));
+        })
+        .catch(() => {});
+    }
+
     void sendToBackend(
-      currentChat.id,
+      currentChat,
       trimmed,
-      currentChat.backendSessionId,
       currentChat.selectedExecutor,
-      currentChat.selectedVariant,
-      currentChat.sessionExecutor
+      currentChat.selectedVariant
     );
   };
 
@@ -1062,6 +1029,29 @@ export function Ui6ChatbotPage() {
       ...prev,
       [projectId]: !(prev[projectId] ?? true),
     }));
+  };
+
+  const handleCreateThread = async (projectId: string) => {
+    const createdThread = await newUiApi.createThread(projectId, {
+      title: 'New thread',
+      execution_mode: 'in_place',
+    });
+    const thread: ProjectThread = {
+      id: createdThread.id,
+      title: createdThread.title,
+      execution_mode: createdThread.execution_mode,
+      updated_at: new Date(createdThread.updated_at),
+    };
+    setProjectThreadsById((prev) => ({
+      ...prev,
+      [projectId]: [thread, ...(prev[projectId] ?? [])],
+    }));
+    upsertChatFromThread(projectId, thread, []);
+  };
+
+  const handleOpenThread = (projectId: string, thread: ProjectThread) => {
+    setActiveProjectId(projectId);
+    upsertChatFromThread(projectId, thread, []);
   };
 
   const selectRepoFolder = async () => {
@@ -1161,7 +1151,8 @@ export function Ui6ChatbotPage() {
             <button
               type="button"
               onClick={() => {
-                createChat();
+                if (!activeProjectId) return;
+                void handleCreateThread(activeProjectId);
                 if (isMobile) setIsLeftSidebarOpen(false);
               }}
               className="flex h-9 w-full items-center justify-start rounded bg-transparent px-3 text-sm font-normal text-[#e5e5e5] transition-colors hover:bg-[#2a2a2a]"
@@ -1234,8 +1225,15 @@ export function Ui6ChatbotPage() {
                       <div key={project.id}>
                         <button
                           type="button"
-                          onClick={() => toggleProjectExpanded(project.id)}
-                          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-[#e5e5e5] transition-colors hover:bg-[#2a2a2a]"
+                          onClick={() => {
+                            setActiveProjectId(project.id);
+                            toggleProjectExpanded(project.id);
+                          }}
+                          className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-[#2a2a2a] ${
+                            activeProjectId === project.id
+                              ? 'bg-[#222222] text-[#f5f5f5]'
+                              : 'text-[#e5e5e5]'
+                          }`}
                         >
                           {isExpanded ? (
                             <ChevronDown className="h-3 w-3 flex-shrink-0" />
@@ -1257,7 +1255,7 @@ export function Ui6ChatbotPage() {
                                   type="button"
                                   key={thread.id}
                                   onClick={() => {
-                                    handleSendMessage(thread.title);
+                                    handleOpenThread(project.id, thread);
                                     if (isMobile) setIsLeftSidebarOpen(false);
                                   }}
                                   className="flex w-full items-center rounded px-2 py-1.5 text-left text-sm text-[#a1a1a1] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
@@ -1314,13 +1312,19 @@ export function Ui6ChatbotPage() {
                 </h1>
               )}
               <p className="truncate text-xs text-[#777777]">
-                {workspaceId
-                  ? `${effectiveComposerExecutor ?? 'No Executor'}${
-                      effectiveComposerVariant
-                        ? ` · ${effectiveComposerVariant}`
-                        : ''
-                    } · ${workspaceId.slice(0, 8)}`
-                  : workspaceStatus}
+                {`${effectiveComposerExecutor ?? 'No Executor'}${
+                  effectiveComposerVariant ? ` · ${effectiveComposerVariant}` : ''
+                }${
+                  currentChat
+                    ? ` · ${
+                        currentChat.executionMode === 'in_place'
+                          ? 'In-place'
+                          : 'Isolated'
+                      }`
+                    : activeProjectId
+                      ? ' · ready'
+                      : ' · select project'
+                }`}
               </p>
             </div>
 

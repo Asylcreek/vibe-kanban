@@ -95,6 +95,10 @@ import {
   CreateFromPrError,
   MigrationRequest,
   MigrationResponse,
+  ChatThread,
+  ChatThreadExecutionMode,
+  UpdateChatThread,
+  SendThreadMessageRequest,
 } from 'shared/types';
 import type { WorkspaceWithSession } from '@/types/attempt';
 import { createWorkspaceWithSession } from '@/types/attempt';
@@ -427,6 +431,46 @@ export const sessionsApi = {
       body: JSON.stringify(data),
     });
     return handleApiResponse<void>(response);
+  },
+};
+
+export const newUiApi = {
+  listThreads: async (projectId: string): Promise<ChatThread[]> => {
+    const response = await makeRequest(`/api/new-ui/projects/${projectId}/threads`);
+    return handleApiResponse<ChatThread[]>(response);
+  },
+
+  createThread: async (
+    projectId: string,
+    data: { title: string; execution_mode?: ChatThreadExecutionMode | null }
+  ): Promise<ChatThread> => {
+    const response = await makeRequest(`/api/new-ui/projects/${projectId}/threads`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return handleApiResponse<ChatThread>(response);
+  },
+
+  updateThread: async (
+    threadId: string,
+    data: UpdateChatThread
+  ): Promise<ChatThread> => {
+    const response = await makeRequest(`/api/new-ui/threads/${threadId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return handleApiResponse<ChatThread>(response);
+  },
+
+  sendThreadMessage: async (
+    threadId: string,
+    data: SendThreadMessageRequest
+  ): Promise<ExecutionProcess> => {
+    const response = await makeRequest(`/api/new-ui/threads/${threadId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return handleApiResponse<ExecutionProcess>(response);
   },
 };
 
