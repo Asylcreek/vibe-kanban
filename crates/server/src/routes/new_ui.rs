@@ -15,6 +15,7 @@ use db::models::{
         ChatThread, ChatThreadError, ChatThreadExecutionMode, CreateChatThread, UpdateChatThread,
     },
     chat_thread_binding::{ChatThreadBinding, UpsertChatThreadBinding},
+    chat_thread_message::{ChatThreadMessage, ChatThreadMessageRole, CreateChatThreadMessage},
     coding_agent_turn::CodingAgentTurn,
     execution_process::{ExecutionProcess, ExecutionProcessRunReason},
     project::Project,
@@ -58,6 +59,12 @@ pub struct SendThreadMessageRequest {
     pub retry_process_id: Option<Uuid>,
     pub force_when_dirty: Option<bool>,
     pub perform_git_reset: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, TS)]
+pub struct UpsertAssistantThreadMessageRequest {
+    pub execution_process_id: Uuid,
+    pub content: String,
 }
 
 #[derive(Debug, FromRow)]
@@ -391,6 +398,57 @@ async fn resolve_thread_workspace(
     Ok(workspace)
 }
 
+async fn get_thread_session_id(
+    pool: &sqlx::SqlitePool,
+    thread_id: Uuid,
+) -> Result<Option<Uuid>, ApiError> {
+    Ok(ChatThreadBinding::find_by_thread_id(pool, thread_id)
+        .await?
+        .and_then(|binding| binding.session_id))
+}
+
+pub async fn list_thread_messages(
+    State(deployment): State<DeploymentImpl>,
+    Path(thread_id): Path<Uuid>,
+) -> Result<ResponseJson<ApiResponse<Vec<ChatThreadMessage>>>, ApiError> {
+    let pool = &deployment.db().pool;
+    let _thread = ChatThread::find_by_id(pool, thread_id)
+        .await?
+        .ok_or(ChatThreadError::NotFound)?;
+    let messages = ChatThreadMessage::find_by_thread_id(pool, thread_id).await?;
+    Ok(ResponseJson(ApiResponse::success(messages)))
+}
+
+pub async fn get_active_thread_process(
+    State(deployment): State<DeploymentImpl>,
+    Path(thread_id): Path<Uuid>,
+) -> Result<ResponseJson<ApiResponse<Option<ExecutionProcess>>>, ApiError> {
+    let pool = &deployment.db().pool;
+    let _thread = ChatThread::find_by_id(pool, thread_id)
+        .await?
+        .ok_or(ChatThreadError::NotFound)?;
+
+    let process = match get_thread_session_id(pool, thread_id).await? {
+        Some(session_id) => {
+            let latest = ExecutionProcess::find_latest_by_session_and_run_reason(
+                pool,
+                session_id,
+                &ExecutionProcessRunReason::CodingAgent,
+            )
+            .await?;
+            latest.filter(|item| {
+                matches!(
+                    item.status,
+                    db::models::execution_process::ExecutionProcessStatus::Running
+                )
+            })
+        }
+        None => None,
+    };
+
+    Ok(ResponseJson(ApiResponse::success(process)))
+}
+
 pub async fn send_message(
     State(deployment): State<DeploymentImpl>,
     Path(thread_id): Path<Uuid>,
@@ -400,6 +458,7 @@ pub async fn send_message(
     let thread = ChatThread::find_by_id(pool, thread_id)
         .await?
         .ok_or(ChatThreadError::NotFound)?;
+    let prompt = payload.prompt.clone();
 
     ensure_project_is_single_repo(pool, thread.project_id).await?;
 
@@ -526,7 +585,40 @@ pub async fn send_message(
         )
         .await?;
 
+    let _ = ChatThreadMessage::create(
+        pool,
+        &CreateChatThreadMessage {
+            thread_id: thread.id,
+            role: ChatThreadMessageRole::User,
+            content: prompt,
+            execution_process_id: None,
+        },
+        Uuid::new_v4(),
+    )
+    .await?;
+
     Ok(ResponseJson(ApiResponse::success(execution_process)))
+}
+
+pub async fn upsert_assistant_message(
+    State(deployment): State<DeploymentImpl>,
+    Path(thread_id): Path<Uuid>,
+    Json(payload): Json<UpsertAssistantThreadMessageRequest>,
+) -> Result<ResponseJson<ApiResponse<ChatThreadMessage>>, ApiError> {
+    let pool = &deployment.db().pool;
+    let _thread = ChatThread::find_by_id(pool, thread_id)
+        .await?
+        .ok_or(ChatThreadError::NotFound)?;
+
+    let message = ChatThreadMessage::upsert_assistant_for_process(
+        pool,
+        thread_id,
+        payload.execution_process_id,
+        payload.content,
+    )
+    .await?;
+
+    Ok(ResponseJson(ApiResponse::success(message)))
 }
 
 pub async fn stream_thread_execution_processes_ws(
@@ -583,7 +675,18 @@ pub fn router() -> Router<DeploymentImpl> {
             get(list_threads).post(create_thread),
         )
         .route("/new-ui/threads/{thread_id}", patch(update_thread))
-        .route("/new-ui/threads/{thread_id}/messages", post(send_message))
+        .route(
+            "/new-ui/threads/{thread_id}/messages",
+            get(list_thread_messages).post(send_message),
+        )
+        .route(
+            "/new-ui/threads/{thread_id}/messages/assistant",
+            post(upsert_assistant_message),
+        )
+        .route(
+            "/new-ui/threads/{thread_id}/active-process",
+            get(get_active_thread_process),
+        )
         .route(
             "/new-ui/threads/{thread_id}/processes/stream/ws",
             get(stream_thread_execution_processes_ws),

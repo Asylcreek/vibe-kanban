@@ -26,13 +26,15 @@ import {
 } from 'lucide-react';
 import {
   BaseCodingAgent,
+  type ChatThreadMessage,
   type ChatThreadExecutionMode,
+  type ExecutionProcess,
   type PatchType,
   type Project,
 } from 'shared/types';
 import { useUserSystem } from '@/components/ConfigProvider';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { newUiApi, projectsApi, repoApi } from '@/lib/api';
+import { executionProcessesApi, newUiApi, projectsApi, repoApi } from '@/lib/api';
 import { getVariantOptions } from '@/utils/executor';
 import { streamJsonPatchEntries } from '@/utils/streamJsonPatchEntries';
 
@@ -56,6 +58,15 @@ interface Ui6Chat {
 }
 
 const DROID_EXECUTOR = BaseCodingAgent.DROID;
+
+function toUiMessage(message: ChatThreadMessage): Ui6Message {
+  return {
+    id: message.id,
+    text: message.content,
+    isUser: message.role === 'user',
+    timestamp: new Date(message.created_at),
+  };
+}
 
 function extractAssistantText(entries: PatchType[]): string {
   return entries
@@ -621,9 +632,15 @@ export function Ui6ChatbotPage() {
   const [rightSidebarWidth, setRightSidebarWidth] = useState(320);
 
   const messageScrollRef = useRef<HTMLDivElement | null>(null);
+  const loadedThreadMessagesRef = useRef<Set<string>>(new Set());
   const activeStreamRef = useRef<ReturnType<
     typeof streamJsonPatchEntries<PatchType>
   > | null>(null);
+  const activeStreamMetaRef = useRef<{
+    threadId: string;
+    processId: string;
+    assistantMessageId: string;
+  } | null>(null);
   const activeResizeRef = useRef<{
     side: 'left' | 'right';
     startX: number;
@@ -678,6 +695,7 @@ export function Ui6ChatbotPage() {
     return () => {
       activeStreamRef.current?.close();
       activeStreamRef.current = null;
+      activeStreamMetaRef.current = null;
     };
   }, []);
 
@@ -818,7 +836,7 @@ export function Ui6ChatbotPage() {
     return chatToUse!;
   };
 
-  const setAssistantMessage = (
+  const setAssistantMessage = useCallback((
     chatId: string,
     messageId: string,
     text: string
@@ -851,7 +869,164 @@ export function Ui6ChatbotPage() {
         };
       })
     );
-  };
+  }, []);
+
+  const upsertThreadMessages = useCallback((
+    projectId: string,
+    threadId: string,
+    messages: Ui6Message[]
+  ) => {
+    setChats((prev) =>
+      prev.map((chat) =>
+        chat.id === threadId
+          ? {
+              ...chat,
+              projectId,
+              messages,
+              updatedAt:
+                messages.length > 0
+                  ? messages[messages.length - 1]!.timestamp
+                  : chat.updatedAt,
+            }
+          : chat
+      )
+    );
+  }, []);
+
+  const loadThreadMessages = useCallback(async (
+    projectId: string,
+    threadId: string,
+    force = false
+  ) => {
+    if (!force && loadedThreadMessagesRef.current.has(threadId)) {
+      return;
+    }
+    const messages = await newUiApi.listThreadMessages(threadId);
+    upsertThreadMessages(
+      projectId,
+      threadId,
+      messages.map(toUiMessage)
+    );
+    loadedThreadMessagesRef.current.add(threadId);
+  }, [upsertThreadMessages]);
+
+  const persistAssistantMessage = useCallback(async (
+    threadId: string,
+    processId: string,
+    content: string
+  ) => {
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    try {
+      await newUiApi.upsertAssistantThreadMessage(threadId, {
+        execution_process_id: processId,
+        content: trimmed,
+      });
+    } catch {
+      // Best effort to avoid blocking UI updates on persistence errors.
+    }
+  }, []);
+
+  const finalizeAssistantMessageText = useCallback((
+    process: ExecutionProcess,
+    fallbackText: string
+  ) => {
+    if (process.status === 'completed') {
+      return fallbackText || 'Completed.';
+    }
+    if (process.status === 'killed') {
+      return `Stopped.${process.exit_code !== null ? ` Exit code ${process.exit_code}.` : ''}`;
+    }
+    if (process.status === 'failed') {
+      return `Failed.${process.exit_code !== null ? ` Exit code ${process.exit_code}.` : ''}`;
+    }
+    return fallbackText || 'Completed.';
+  }, []);
+
+  const attachProcessStream = useCallback((threadId: string, processId: string) => {
+    const assistantMessageId = `${processId}-assistant`;
+    activeStreamRef.current?.close();
+    activeStreamRef.current = null;
+    activeStreamMetaRef.current = {
+      threadId,
+      processId,
+      assistantMessageId,
+    };
+    setIsTyping(true);
+
+    activeStreamRef.current = streamJsonPatchEntries<PatchType>(
+      `/api/execution-processes/${processId}/normalized-logs/ws`,
+      {
+        onEntries: (entries) => {
+          const assistantText = extractAssistantText(entries);
+          if (assistantText) {
+            setAssistantMessage(threadId, assistantMessageId, assistantText);
+          }
+        },
+        onFinished: (entries) => {
+          const assistantText = extractAssistantText(entries);
+          void executionProcessesApi
+            .getDetails(processId)
+            .then((process) => {
+              const finalText = finalizeAssistantMessageText(
+                process,
+                assistantText
+              );
+              setAssistantMessage(threadId, assistantMessageId, finalText);
+              return persistAssistantMessage(threadId, processId, finalText);
+            })
+            .catch(() => {
+              const fallback = assistantText || 'Completed.';
+              setAssistantMessage(threadId, assistantMessageId, fallback);
+              return persistAssistantMessage(threadId, processId, fallback);
+            })
+            .finally(() => {
+              setIsTyping(false);
+              activeStreamRef.current = null;
+              activeStreamMetaRef.current = null;
+            });
+        },
+        onError: () => {
+          const text = 'Stream failed.';
+          setAssistantMessage(threadId, assistantMessageId, text);
+          void persistAssistantMessage(threadId, processId, text);
+          setIsTyping(false);
+          activeStreamRef.current = null;
+          activeStreamMetaRef.current = null;
+        },
+      }
+    );
+  }, [finalizeAssistantMessageText, persistAssistantMessage, setAssistantMessage]);
+
+  useEffect(() => {
+    const threadId = currentChat?.id;
+    const projectId = currentChat?.projectId;
+    if (!threadId || !projectId) {
+      return;
+    }
+
+    void loadThreadMessages(projectId, threadId);
+
+    void (async () => {
+      try {
+        const activeProcess = await newUiApi.getActiveThreadProcess(threadId);
+        if (!activeProcess) {
+          return;
+        }
+        const activeMeta = activeStreamMetaRef.current;
+        if (
+          activeMeta &&
+          activeMeta.threadId === threadId &&
+          activeMeta.processId === activeProcess.id
+        ) {
+          return;
+        }
+        attachProcessStream(threadId, activeProcess.id);
+      } catch {
+        // Non-fatal: thread remains usable without reconnect.
+      }
+    })();
+  }, [attachProcessStream, currentChat?.id, currentChat?.projectId, loadThreadMessages]);
 
   const loadProjects = useCallback(async () => {
     setIsLoadingProjects(true);
@@ -905,20 +1080,16 @@ export function Ui6ChatbotPage() {
     selectedExecutor: BaseCodingAgent | null,
     selectedVariant: string | null
   ) => {
-    const assistantMessageId = `${Date.now()}-assistant`;
-    setAssistantMessage(chat.id, assistantMessageId, 'Running...');
-
     if (!selectedExecutor) {
       setAssistantMessage(
         chat.id,
-        assistantMessageId,
+        `${Date.now()}-assistant`,
         'No executor available. Configure an agent in Settings.'
       );
       return;
     }
 
     setIsTyping(true);
-    activeStreamRef.current?.close();
 
     try {
       const process = await newUiApi.sendThreadMessage(chat.id, {
@@ -931,39 +1102,11 @@ export function Ui6ChatbotPage() {
         force_when_dirty: null,
         perform_git_reset: null,
       });
-
-      activeStreamRef.current = streamJsonPatchEntries<PatchType>(
-        `/api/execution-processes/${process.id}/normalized-logs/ws`,
-        {
-          onEntries: (entries) => {
-            const assistantText = extractAssistantText(entries);
-            if (assistantText) {
-              setAssistantMessage(chat.id, assistantMessageId, assistantText);
-            }
-          },
-          onFinished: (entries) => {
-            const assistantText = extractAssistantText(entries);
-            if (!assistantText) {
-              setAssistantMessage(chat.id, assistantMessageId, 'Completed.');
-            }
-            setIsTyping(false);
-            activeStreamRef.current = null;
-          },
-          onError: () => {
-            setAssistantMessage(
-              chat.id,
-              assistantMessageId,
-              'Stream failed.'
-            );
-            setIsTyping(false);
-            activeStreamRef.current = null;
-          },
-        }
-      );
+      attachProcessStream(chat.id, process.id);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unknown backend error';
-      setAssistantMessage(chat.id, assistantMessageId, `Error: ${message}`);
+      setAssistantMessage(chat.id, `${Date.now()}-assistant`, `Error: ${message}`);
       setIsTyping(false);
     }
   };
@@ -1001,6 +1144,7 @@ export function Ui6ChatbotPage() {
           [activeProjectId]: [thread, ...(prev[activeProjectId] ?? [])],
         }));
         const newChat = upsertChatFromThread(activeProjectId, thread, [userMessage]);
+        loadedThreadMessagesRef.current.add(newChat.id);
         const selectedExecutor =
           draftExecutor ?? newChat.selectedExecutor ?? fallbackExecutor;
         const selectedVariant =
@@ -1147,11 +1291,14 @@ export function Ui6ChatbotPage() {
       [projectId]: [thread, ...(prev[projectId] ?? [])],
     }));
     upsertChatFromThread(projectId, thread, []);
+    loadedThreadMessagesRef.current.delete(thread.id);
+    await loadThreadMessages(projectId, thread.id, true);
   };
 
   const handleOpenThread = (projectId: string, thread: ProjectThread) => {
     setActiveProjectId(projectId);
     upsertChatFromThread(projectId, thread, []);
+    void loadThreadMessages(projectId, thread.id);
   };
 
   const handleThreadModeChange = async (

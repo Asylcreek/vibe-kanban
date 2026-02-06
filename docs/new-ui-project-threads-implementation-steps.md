@@ -67,9 +67,9 @@ Deliverable:
 - `/new-ui` operates via project threads and can execute immediately.
 
 ## Phase 6: Streaming + Message Persistence
-- [ ] Persist user/assistant messages per thread.
-- [ ] Ensure stream reconnect behavior for active runs.
-- [ ] Render process completion and failures without linking to workspaces by default.
+- [x] Persist user/assistant messages per thread.
+- [x] Ensure stream reconnect behavior for active runs.
+- [x] Render process completion and failures without linking to workspaces by default.
 
 Deliverable:
 - Stable thread history and resilient stream UX.

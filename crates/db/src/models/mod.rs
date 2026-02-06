@@ -1,5 +1,6 @@
 pub mod chat_thread;
 pub mod chat_thread_binding;
+pub mod chat_thread_message;
 pub mod coding_agent_turn;
 pub mod execution_process;
 pub mod execution_process_logs;

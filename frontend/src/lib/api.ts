@@ -96,9 +96,11 @@ import {
   MigrationRequest,
   MigrationResponse,
   ChatThread,
+  ChatThreadMessage,
   ChatThreadExecutionMode,
   UpdateChatThread,
   SendThreadMessageRequest,
+  UpsertAssistantThreadMessageRequest,
 } from 'shared/types';
 import type { WorkspaceWithSession } from '@/types/attempt';
 import { createWorkspaceWithSession } from '@/types/attempt';
@@ -471,6 +473,34 @@ export const newUiApi = {
       body: JSON.stringify(data),
     });
     return handleApiResponse<ExecutionProcess>(response);
+  },
+
+  listThreadMessages: async (threadId: string): Promise<ChatThreadMessage[]> => {
+    const response = await makeRequest(`/api/new-ui/threads/${threadId}/messages`);
+    return handleApiResponse<ChatThreadMessage[]>(response);
+  },
+
+  upsertAssistantThreadMessage: async (
+    threadId: string,
+    data: UpsertAssistantThreadMessageRequest
+  ): Promise<ChatThreadMessage> => {
+    const response = await makeRequest(
+      `/api/new-ui/threads/${threadId}/messages/assistant`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    );
+    return handleApiResponse<ChatThreadMessage>(response);
+  },
+
+  getActiveThreadProcess: async (
+    threadId: string
+  ): Promise<ExecutionProcess | null> => {
+    const response = await makeRequest(
+      `/api/new-ui/threads/${threadId}/active-process`
+    );
+    return handleApiResponse<ExecutionProcess | null>(response);
   },
 };
 

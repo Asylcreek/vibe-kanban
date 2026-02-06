@@ -44,6 +44,12 @@ export type ChatThreadBinding = { thread_id: string, session_id: string | null, 
 
 export type UpsertChatThreadBinding = { thread_id: string, session_id: string | null, workspace_id: string | null, };
 
+export type ChatThreadMessageRole = "user" | "assistant";
+
+export type ChatThreadMessage = { id: string, thread_id: string, role: ChatThreadMessageRole, content: string, execution_process_id: string | null, created_at: Date, updated_at: Date, };
+
+export type CreateChatThreadMessage = { thread_id: string, role: ChatThreadMessageRole, content: string, execution_process_id: string | null, };
+
 export type Tag = { id: string, tag_name: string, content: string, created_at: string, updated_at: string, };
 
 export type CreateTag = { tag_name: string, content: string, };
@@ -301,6 +307,8 @@ export type CreateAndStartTaskRequest = { task: CreateTask, executor_profile_id:
 export type CreateThreadRequest = { title: string, execution_mode: ChatThreadExecutionMode | null, };
 
 export type SendThreadMessageRequest = { prompt: string, executor_profile_id: ExecutorProfileId, retry_process_id: string | null, force_when_dirty: boolean | null, perform_git_reset: boolean | null, };
+
+export type UpsertAssistantThreadMessageRequest = { execution_process_id: string, content: string, };
 
 export type CreatePrApiRequest = { title: string, body: string | null, target_branch: string | null, draft: boolean | null, repo_id: string, auto_generate_description: boolean, };
 
