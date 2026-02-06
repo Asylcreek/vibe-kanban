@@ -24,8 +24,10 @@ import {
   Zap,
 } from 'lucide-react';
 import { BaseCodingAgent, type PatchType, type Project } from 'shared/types';
+import { useUserSystem } from '@/components/ConfigProvider';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { attemptsApi, projectsApi, sessionsApi } from '@/lib/api';
+import { getVariantOptions } from '@/utils/executor';
 import { streamJsonPatchEntries } from '@/utils/streamJsonPatchEntries';
 
 interface Ui6Message {
@@ -40,13 +42,14 @@ interface Ui6Chat {
   title: string;
   messages: Ui6Message[];
   backendSessionId: string | null;
+  sessionExecutor: BaseCodingAgent | null;
+  selectedExecutor: BaseCodingAgent | null;
+  selectedVariant: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 const DROID_EXECUTOR = BaseCodingAgent.DROID;
-const DROID_VARIANT = 'GLM_4_7_0_CUSTOM';
-const DROID_MODEL = 'custom:GLM-4.7-0';
 const HARDCODED_TEST_WORKSPACE_ID = 'bc3fc146-8308-4812-b670-dc2a6ee9c978';
 
 async function pickWorkspaceId(): Promise<string | null> {
@@ -78,13 +81,26 @@ function extractAssistantText(entries: PatchType[]): string {
 
 interface Ui6ChatInputProps {
   onSendMessage: (message: string) => void;
+  selectedExecutor: BaseCodingAgent | null;
+  selectedVariant: string | null;
+  executorOptions: BaseCodingAgent[];
+  variantOptions: string[];
+  onExecutorChange: (executor: BaseCodingAgent) => void;
+  onVariantChange: (variant: string | null) => void;
   disabled?: boolean;
 }
 
-function Ui6ChatInput({ onSendMessage, disabled }: Ui6ChatInputProps) {
+function Ui6ChatInput({
+  onSendMessage,
+  selectedExecutor,
+  selectedVariant,
+  executorOptions,
+  variantOptions,
+  onExecutorChange,
+  onVariantChange,
+  disabled,
+}: Ui6ChatInputProps) {
   const [message, setMessage] = useState('');
-  const [model, setModel] = useState('GPT-5.2-Codex');
-  const [intelligence, setIntelligence] = useState('High');
 
   const handleSubmit = () => {
     if (!message.trim() || disabled) return;
@@ -121,26 +137,36 @@ function Ui6ChatInput({ onSendMessage, disabled }: Ui6ChatInputProps) {
 
             <label className="flex h-8 min-w-[120px] items-center gap-1 rounded px-2 text-sm text-[#e5e5e5] transition-colors hover:bg-[#2a2a2a]">
               <select
-                value={model}
-                onChange={(event) => setModel(event.target.value)}
+                value={selectedExecutor ?? ''}
+                onChange={(event) =>
+                  onExecutorChange(event.target.value as BaseCodingAgent)
+                }
                 className="max-w-[110px] appearance-none border-0 bg-transparent outline-none"
+                disabled={disabled || executorOptions.length === 0}
               >
-                <option>GPT-5.2-Codex</option>
-                <option>GPT-4</option>
-                <option>Claude-3</option>
+                {executorOptions.map((executor) => (
+                  <option key={executor} value={executor}>
+                    {executor}
+                  </option>
+                ))}
               </select>
               <ChevronDown className="h-3 w-3 text-[#888888]" />
             </label>
 
             <label className="flex h-8 min-w-[72px] items-center gap-1 rounded px-2 text-sm text-[#e5e5e5] transition-colors hover:bg-[#2a2a2a]">
               <select
-                value={intelligence}
-                onChange={(event) => setIntelligence(event.target.value)}
+                value={selectedVariant ?? ''}
+                onChange={(event) =>
+                  onVariantChange(event.target.value || null)
+                }
                 className="appearance-none border-0 bg-transparent outline-none"
+                disabled={disabled || variantOptions.length === 0}
               >
-                <option>Low</option>
-                <option>Medium</option>
-                <option>High</option>
+                {variantOptions.map((variant) => (
+                  <option key={variant} value={variant}>
+                    {variant}
+                  </option>
+                ))}
               </select>
               <ChevronDown className="h-3 w-3 text-[#888888]" />
             </label>
@@ -231,7 +257,25 @@ function Ui6TypingIndicator() {
   );
 }
 
-function Ui6Welcome({ onSendMessage }: { onSendMessage: (message: string) => void }) {
+function Ui6Welcome({
+  onSendMessage,
+  selectedExecutor,
+  selectedVariant,
+  executorOptions,
+  variantOptions,
+  onExecutorChange,
+  onVariantChange,
+  disabled,
+}: {
+  onSendMessage: (message: string) => void;
+  selectedExecutor: BaseCodingAgent | null;
+  selectedVariant: string | null;
+  executorOptions: BaseCodingAgent[];
+  variantOptions: string[];
+  onExecutorChange: (executor: BaseCodingAgent) => void;
+  onVariantChange: (variant: string | null) => void;
+  disabled?: boolean;
+}) {
   const actions = [
     {
       icon: Code,
@@ -315,7 +359,16 @@ function Ui6Welcome({ onSendMessage }: { onSendMessage: (message: string) => voi
 
       <div className="flex-shrink-0 border-t border-[#1a1a1a] bg-[#0d0d0d] px-6 py-4">
         <div className="mx-auto max-w-4xl">
-          <Ui6ChatInput onSendMessage={onSendMessage} />
+          <Ui6ChatInput
+            onSendMessage={onSendMessage}
+            selectedExecutor={selectedExecutor}
+            selectedVariant={selectedVariant}
+            executorOptions={executorOptions}
+            variantOptions={variantOptions}
+            onExecutorChange={onExecutorChange}
+            onVariantChange={onVariantChange}
+            disabled={disabled}
+          />
         </div>
       </div>
     </div>
@@ -453,6 +506,7 @@ interface ProjectThread {
 
 export function Ui6ChatbotPage() {
   const isMobile = useMediaQuery('(max-width: 767px)');
+  const { profiles } = useUserSystem();
   const [isThreadsExpanded, setIsThreadsExpanded] = useState(true);
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
@@ -480,6 +534,10 @@ export function Ui6ChatbotPage() {
   const [expandedProjects, setExpandedProjects] = useState<
     Record<string, boolean>
   >({});
+  const [draftExecutor, setDraftExecutor] = useState<BaseCodingAgent | null>(
+    null
+  );
+  const [draftVariant, setDraftVariant] = useState<string | null>(null);
 
   const messageScrollRef = useRef<HTMLDivElement | null>(null);
   const activeStreamRef = useRef<ReturnType<
@@ -490,6 +548,34 @@ export function Ui6ChatbotPage() {
     () => chats.find((chat) => chat.id === currentChatId) ?? null,
     [chats, currentChatId]
   );
+  const executorOptions = useMemo(
+    () => Object.keys(profiles ?? {}) as BaseCodingAgent[],
+    [profiles]
+  );
+  const fallbackExecutor = useMemo(
+    () =>
+      executorOptions.includes(DROID_EXECUTOR)
+        ? DROID_EXECUTOR
+        : (executorOptions[0] ?? null),
+    [executorOptions]
+  );
+  const fallbackVariant = useMemo(
+    () => getVariantOptions(fallbackExecutor, profiles)[0] ?? null,
+    [fallbackExecutor, profiles]
+  );
+  const composerExecutor = currentChat?.selectedExecutor ?? draftExecutor;
+  const effectiveComposerExecutor = composerExecutor ?? fallbackExecutor;
+  const variantOptions = useMemo(
+    () => getVariantOptions(effectiveComposerExecutor, profiles),
+    [effectiveComposerExecutor, profiles]
+  );
+  const composerVariant = currentChat?.selectedVariant ?? draftVariant;
+  const effectiveComposerVariant = useMemo(() => {
+    if (composerVariant && variantOptions.includes(composerVariant)) {
+      return composerVariant;
+    }
+    return variantOptions[0] ?? null;
+  }, [composerVariant, variantOptions]);
   const projectThreadsById = useMemo<Record<string, ProjectThread[]>>(
     () =>
       Object.fromEntries(
@@ -497,6 +583,18 @@ export function Ui6ChatbotPage() {
       ),
     [projects]
   );
+
+  useEffect(() => {
+    if (!draftExecutor) {
+      setDraftExecutor(fallbackExecutor);
+    }
+  }, [draftExecutor, fallbackExecutor]);
+
+  useEffect(() => {
+    if (draftVariant === null) {
+      setDraftVariant(fallbackVariant);
+    }
+  }, [draftVariant, fallbackVariant]);
 
   useEffect(() => {
     let cancelled = false;
@@ -546,11 +644,16 @@ export function Ui6ChatbotPage() {
 
   const createChat = (title = 'New Chat', initialMessages: Ui6Message[] = []) => {
     const now = new Date();
+    const defaultExecutor = fallbackExecutor;
+    const defaultVariant = getVariantOptions(defaultExecutor, profiles)[0] ?? null;
     const newChat: Ui6Chat = {
       id: `${Date.now()}`,
       title,
       messages: initialMessages,
       backendSessionId: null,
+      sessionExecutor: null,
+      selectedExecutor: defaultExecutor,
+      selectedVariant: defaultVariant,
       createdAt: now,
       updatedAt: now,
     };
@@ -643,7 +746,10 @@ export function Ui6ChatbotPage() {
   const sendToBackend = async (
     chatId: string,
     prompt: string,
-    initialSessionId: string | null
+    initialSessionId: string | null,
+    selectedExecutor: BaseCodingAgent | null,
+    selectedVariant: string | null,
+    sessionExecutor: BaseCodingAgent | null
   ) => {
     const assistantMessageId = `${Date.now()}-assistant`;
     setAssistantMessage(chatId, assistantMessageId, 'Running...');
@@ -657,31 +763,50 @@ export function Ui6ChatbotPage() {
       );
       return;
     }
+    if (!selectedExecutor) {
+      setAssistantMessage(
+        chatId,
+        assistantMessageId,
+        'No executor available. Configure an agent in Settings.'
+      );
+      return;
+    }
 
     setIsTyping(true);
     activeStreamRef.current?.close();
 
     try {
       let sessionId = initialSessionId;
+      const shouldCreateSession =
+        !sessionId || (sessionExecutor && sessionExecutor !== selectedExecutor);
 
-      if (!sessionId) {
+      if (shouldCreateSession) {
         const session = await sessionsApi.create({
           workspace_id: workspaceIdToUse,
-          executor: DROID_EXECUTOR,
+          executor: selectedExecutor,
         });
         sessionId = session.id;
         setChats((prev) =>
           prev.map((chat) =>
-            chat.id === chatId ? { ...chat, backendSessionId: sessionId } : chat
+            chat.id === chatId
+              ? {
+                  ...chat,
+                  backendSessionId: sessionId,
+                  sessionExecutor: selectedExecutor,
+                }
+              : chat
           )
         );
+      }
+      if (!sessionId) {
+        throw new Error('Failed to initialize session');
       }
 
       const process = await sessionsApi.followUp(sessionId, {
         prompt,
         executor_profile_id: {
-          executor: DROID_EXECUTOR,
-          variant: DROID_VARIANT,
+          executor: selectedExecutor,
+          variant: selectedVariant,
         },
         retry_process_id: null,
         force_when_dirty: null,
@@ -743,7 +868,29 @@ export function Ui6ChatbotPage() {
         trimmed.slice(0, 50) + (trimmed.length > 50 ? '...' : ''),
         [userMessage]
       );
-      void sendToBackend(newChat.id, trimmed, newChat.backendSessionId);
+      const selectedExecutor =
+        draftExecutor ?? newChat.selectedExecutor ?? fallbackExecutor;
+      const selectedVariant =
+        draftVariant ?? newChat.selectedVariant ?? fallbackVariant;
+      setChats((prev) =>
+        prev.map((chat) =>
+          chat.id === newChat.id
+            ? {
+                ...chat,
+                selectedExecutor,
+                selectedVariant,
+              }
+            : chat
+        )
+      );
+      void sendToBackend(
+        newChat.id,
+        trimmed,
+        newChat.backendSessionId,
+        selectedExecutor,
+        selectedVariant,
+        newChat.sessionExecutor
+      );
       return;
     }
 
@@ -769,7 +916,51 @@ export function Ui6ChatbotPage() {
       })
     );
 
-    void sendToBackend(currentChat.id, trimmed, currentChat.backendSessionId);
+    void sendToBackend(
+      currentChat.id,
+      trimmed,
+      currentChat.backendSessionId,
+      currentChat.selectedExecutor,
+      currentChat.selectedVariant,
+      currentChat.sessionExecutor
+    );
+  };
+
+  const handleExecutorChange = (executor: BaseCodingAgent) => {
+    const nextVariant = getVariantOptions(executor, profiles)[0] ?? null;
+    if (!currentChat) {
+      setDraftExecutor(executor);
+      setDraftVariant(nextVariant);
+      return;
+    }
+    setChats((prev) =>
+      prev.map((chat) =>
+        chat.id === currentChat.id
+          ? {
+              ...chat,
+              selectedExecutor: executor,
+              selectedVariant: nextVariant,
+            }
+          : chat
+      )
+    );
+  };
+
+  const handleVariantChange = (variant: string | null) => {
+    if (!currentChat) {
+      setDraftVariant(variant);
+      return;
+    }
+    setChats((prev) =>
+      prev.map((chat) =>
+        chat.id === currentChat.id
+          ? {
+              ...chat,
+              selectedVariant: variant,
+            }
+          : chat
+      )
+    );
   };
 
   const openCreateProjectModal = () => {
@@ -1029,7 +1220,11 @@ export function Ui6ChatbotPage() {
               )}
               <p className="truncate text-xs text-[#777777]">
                 {workspaceId
-                  ? `DROID · ${DROID_MODEL} · ${workspaceId.slice(0, 8)}`
+                  ? `${effectiveComposerExecutor ?? 'No Executor'}${
+                      effectiveComposerVariant
+                        ? ` · ${effectiveComposerVariant}`
+                        : ''
+                    } · ${workspaceId.slice(0, 8)}`
                   : workspaceStatus}
               </p>
             </div>
@@ -1060,13 +1255,28 @@ export function Ui6ChatbotPage() {
                 <div className="mx-auto max-w-4xl">
                   <Ui6ChatInput
                     onSendMessage={handleSendMessage}
+                    selectedExecutor={effectiveComposerExecutor}
+                    selectedVariant={effectiveComposerVariant}
+                    executorOptions={executorOptions}
+                    variantOptions={variantOptions}
+                    onExecutorChange={handleExecutorChange}
+                    onVariantChange={handleVariantChange}
                     disabled={isTyping}
                   />
                 </div>
               </div>
             </div>
           ) : (
-            <Ui6Welcome onSendMessage={handleSendMessage} />
+            <Ui6Welcome
+              onSendMessage={handleSendMessage}
+              selectedExecutor={effectiveComposerExecutor}
+              selectedVariant={effectiveComposerVariant}
+              executorOptions={executorOptions}
+              variantOptions={variantOptions}
+              onExecutorChange={handleExecutorChange}
+              onVariantChange={handleVariantChange}
+              disabled={isTyping}
+            />
           )}
         </div>
 
