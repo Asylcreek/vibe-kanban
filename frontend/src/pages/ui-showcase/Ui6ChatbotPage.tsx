@@ -13,6 +13,7 @@ import {
   GraduationCap,
   Menu,
   Mic,
+  MoreHorizontal,
   PanelRightOpen,
   PenTool,
   Pencil,
@@ -21,6 +22,7 @@ import {
   Settings,
   Sparkles,
   Target,
+  Trash2,
   User,
   X,
   Zap,
@@ -717,6 +719,16 @@ export function Ui6ChatbotPage() {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] =
     useState(false);
+  const [openProjectOptionsId, setOpenProjectOptionsId] = useState<
+    string | null
+  >(null);
+  const [deleteProjectTarget, setDeleteProjectTarget] = useState<Project | null>(
+    null
+  );
+  const [isDeletingProject, setIsDeletingProject] = useState(false);
+  const [deleteProjectError, setDeleteProjectError] = useState<string | null>(
+    null
+  );
   const [createProjectName, setCreateProjectName] = useState('');
   const [createProjectRepoPath, setCreateProjectRepoPath] = useState('');
   const [isCreatingProject, setIsCreatingProject] = useState(false);
@@ -859,6 +871,23 @@ export function Ui6ChatbotPage() {
     if (!messageScrollRef.current) return;
     messageScrollRef.current.scrollTop = messageScrollRef.current.scrollHeight;
   }, [currentChat?.messages, isTyping]);
+
+  useEffect(() => {
+    if (!openProjectOptionsId) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (!target.closest('[data-project-options-root="true"]')) {
+        setOpenProjectOptionsId(null);
+      }
+    };
+
+    window.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      window.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [openProjectOptionsId]);
 
   useEffect(() => {
     const LEFT_MIN = 220;
@@ -1387,6 +1416,67 @@ export function Ui6ChatbotPage() {
     setIsCreateProjectModalOpen(false);
   };
 
+  const openDeleteProjectModal = (project: Project) => {
+    setOpenProjectOptionsId(null);
+    setDeleteProjectError(null);
+    setDeleteProjectTarget(project);
+  };
+
+  const closeDeleteProjectModal = () => {
+    if (isDeletingProject) return;
+    setDeleteProjectTarget(null);
+    setDeleteProjectError(null);
+  };
+
+  const handleDeleteProject = async () => {
+    if (!deleteProjectTarget || isDeletingProject) return;
+
+    setIsDeletingProject(true);
+    setDeleteProjectError(null);
+
+    try {
+      const projectId = deleteProjectTarget.id;
+      await projectsApi.delete(projectId);
+
+      const remainingProjects = projects.filter((p) => p.id !== projectId);
+      const removedThreadIds = chats
+        .filter((chat) => chat.projectId === projectId)
+        .map((chat) => chat.id);
+      removedThreadIds.forEach((threadId) => {
+        loadedThreadMessagesRef.current.delete(threadId);
+      });
+
+      setProjects(remainingProjects);
+      setProjectThreadsById((prev) => {
+        const next = { ...prev };
+        delete next[projectId];
+        return next;
+      });
+      setExpandedProjects((prev) => {
+        const next = { ...prev };
+        delete next[projectId];
+        return next;
+      });
+      setChats((prev) => prev.filter((chat) => chat.projectId !== projectId));
+
+      if (activeProjectId === projectId) {
+        setActiveProjectId(remainingProjects[0]?.id ?? null);
+        setCurrentBranch(null);
+      }
+      if (currentChat?.projectId === projectId) {
+        setCurrentChatId(null);
+      }
+
+      setDeleteProjectTarget(null);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to delete project.';
+      setDeleteProjectError(message);
+    } finally {
+      setIsDeletingProject(false);
+    }
+  };
+
   const toggleProjectExpanded = (projectId: string) => {
     setExpandedProjects((prev) => ({
       ...prev,
@@ -1682,9 +1772,9 @@ export function Ui6ChatbotPage() {
 
           <div className="h-[calc(100%-132px)] overflow-y-auto px-3 py-2">
             <div className="flex items-center gap-1 px-1 py-1">
-              <button
-                type="button"
-                onClick={() => setIsThreadsExpanded((prev) => !prev)}
+	              <button
+	                type="button"
+	                onClick={() => setIsThreadsExpanded((prev) => !prev)}
                 className="flex min-w-0 flex-1 items-center gap-2 rounded px-1.5 py-1 text-xs font-medium text-[#999999] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
               >
                 {isThreadsExpanded ? (
@@ -1692,11 +1782,11 @@ export function Ui6ChatbotPage() {
                 ) : (
                   <ChevronRight className="h-3 w-3 flex-shrink-0" />
                 )}
-                <span className="truncate">Threads</span>
-              </button>
+	                <span className="truncate">Threads</span>
+	              </button>
 
-              <button
-                type="button"
+	              <button
+	                type="button"
                 onClick={openCreateProjectModal}
                 className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-[#999999] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
                 aria-label="Open create project form"
@@ -1726,7 +1816,7 @@ export function Ui6ChatbotPage() {
                     return (
                       <div key={project.id}>
                         <div
-                          className={`group flex w-full items-center gap-1 rounded transition-colors hover:bg-[#2a2a2a] ${
+                          className={`group relative flex w-full items-center gap-1 rounded transition-colors hover:bg-[#2a2a2a] ${
                             activeProjectId === project.id ? 'bg-[#222222]' : ''
                           }`}
                         >
@@ -1750,10 +1840,45 @@ export function Ui6ChatbotPage() {
                             <span className="flex-1 truncate">{project.name}</span>
                           </button>
 
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
+	                          <button
+	                            type="button"
+	                            onClick={(event) => {
+	                              event.stopPropagation();
+	                              setOpenProjectOptionsId((prev) =>
+	                                prev === project.id ? null : project.id
+	                              );
+	                            }}
+	                            className="pointer-events-none mr-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-[#a1a1a1] opacity-0 transition-all hover:bg-[#343434] hover:text-[#f5f5f5] group-hover:pointer-events-auto group-hover:opacity-100 focus:pointer-events-auto focus:opacity-100 focus:outline-none"
+	                            aria-label={`Options for ${project.name}`}
+	                            title={`Options for ${project.name}`}
+	                            data-project-options-root="true"
+	                          >
+	                            <MoreHorizontal className="h-3.5 w-3.5" />
+	                          </button>
+
+	                          {openProjectOptionsId === project.id && (
+	                            <div
+	                              className="absolute right-8 top-8 z-30 min-w-[180px] rounded-md border border-[#2f2f2f] bg-[#141414] p-1 shadow-[0_12px_30px_rgba(0,0,0,0.45)]"
+	                              data-project-options-root="true"
+	                            >
+	                              <button
+	                                type="button"
+	                                onClick={(event) => {
+	                                  event.stopPropagation();
+	                                  openDeleteProjectModal(project);
+	                                }}
+	                                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-[#ff9a9a] transition-colors hover:bg-[#2a1b1b] hover:text-[#ffd1d1]"
+	                              >
+	                                <Trash2 className="h-3.5 w-3.5" />
+	                                Delete project
+	                              </button>
+	                            </div>
+	                          )}
+
+	                          <button
+	                            type="button"
+	                            onClick={(event) => {
+	                              event.stopPropagation();
                               setActiveProjectId(project.id);
                               void handleCreateThread(project.id);
                             }}
@@ -2040,6 +2165,71 @@ export function Ui6ChatbotPage() {
                   className="inline-flex h-9 items-center rounded-md bg-[#ececec] px-3 text-sm font-medium text-[#121212] transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {isCreatingProject ? 'Creating...' : 'Create project'}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {deleteProjectTarget && (
+          <>
+            <button
+              type="button"
+              className="fixed inset-0 z-50 bg-black/70"
+              onClick={closeDeleteProjectModal}
+              aria-label="Close delete project confirmation"
+            />
+
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Delete Project"
+              className="fixed left-1/2 top-1/2 z-[60] w-[min(560px,94vw)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2e2e2e] bg-[#121212] shadow-[0_28px_80px_rgba(0,0,0,0.7)]"
+            >
+              <div className="flex items-center justify-between border-b border-[#242424] px-5 py-4">
+                <h2 className="text-base font-medium text-[#ececec]">Delete Project</h2>
+                <button
+                  type="button"
+                  onClick={closeDeleteProjectModal}
+                  className="flex h-8 w-8 items-center justify-center rounded text-[#999999] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
+                  aria-label="Close delete project confirmation"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3 px-5 py-4">
+                <p className="text-sm text-[#d7d7d7]">
+                  This will permanently delete project{' '}
+                  <span className="font-medium text-[#f2f2f2]">
+                    {deleteProjectTarget.name}
+                  </span>{' '}
+                  and all its threads.
+                </p>
+                <p className="text-xs text-[#ff9a9a]">
+                  This action is destructive and cannot be undone.
+                </p>
+                {deleteProjectError && (
+                  <p className="text-xs text-[#ff8f8f]">{deleteProjectError}</p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-[#242424] px-5 py-4">
+                <button
+                  type="button"
+                  onClick={closeDeleteProjectModal}
+                  disabled={isDeletingProject}
+                  className="inline-flex h-9 items-center rounded-md border border-[#343434] px-3 text-sm text-[#c9c9c9] transition-colors hover:bg-[#232323] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteProject()}
+                  disabled={isDeletingProject}
+                  className="inline-flex h-9 items-center rounded-md bg-[#cf3a3a] px-3 text-sm font-medium text-white transition-colors hover:bg-[#df4c4c] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isDeletingProject ? 'Deleting...' : 'Delete project'}
                 </button>
               </div>
             </div>
