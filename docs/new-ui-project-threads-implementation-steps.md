@@ -58,7 +58,7 @@ Deliverable:
 - [x] Replace workspace bootstrap logic in `Ui6ChatbotPage`.
 - [x] Add project-scoped thread list sourced from new APIs.
 - [x] Add thread create/select UX.
-- [ ] Add thread mode toggle (default `in_place`).
+- [x] Add thread mode toggle (default `in_place`).
 - [x] Wire send to new `/api/new-ui/threads/:id/messages`.
 - [x] Keep agent/profile selectors.
 - [x] Remove workspace-not-found messaging from `/new-ui`.

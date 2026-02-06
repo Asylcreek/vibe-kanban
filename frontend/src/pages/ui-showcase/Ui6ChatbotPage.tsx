@@ -541,6 +541,8 @@ export function Ui6ChatbotPage() {
   const [projectThreadsById, setProjectThreadsById] = useState<
     Record<string, ProjectThread[]>
   >({});
+  const [isUpdatingThreadMode, setIsUpdatingThreadMode] = useState(false);
+  const [threadModeError, setThreadModeError] = useState<string | null>(null);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [projectsError, setProjectsError] = useState<string | null>(null);
   const [expandedProjects, setExpandedProjects] = useState<
@@ -699,8 +701,14 @@ export function Ui6ChatbotPage() {
     setChats((prev) => {
       const existing = prev.find((chat) => chat.id === thread.id);
       if (existing) {
-        chatToUse = existing;
-        return prev;
+        const updatedExisting: Ui6Chat = {
+          ...existing,
+          title: thread.title,
+          executionMode: thread.execution_mode,
+          updatedAt: new Date(thread.updated_at),
+        };
+        chatToUse = updatedExisting;
+        return prev.map((chat) => (chat.id === thread.id ? updatedExisting : chat));
       }
 
       const created: Ui6Chat = {
@@ -1054,6 +1062,54 @@ export function Ui6ChatbotPage() {
     upsertChatFromThread(projectId, thread, []);
   };
 
+  const handleThreadModeChange = async (
+    nextMode: ChatThreadExecutionMode
+  ) => {
+    if (!currentChat || currentChat.executionMode === nextMode) return;
+
+    setIsUpdatingThreadMode(true);
+    setThreadModeError(null);
+    try {
+      const updated = await newUiApi.updateThread(currentChat.id, {
+        title: null,
+        execution_mode: nextMode,
+      });
+
+      setChats((prev) =>
+        prev.map((chat) =>
+          chat.id === updated.id
+            ? {
+                ...chat,
+                title: updated.title,
+                executionMode: updated.execution_mode,
+                updatedAt: new Date(updated.updated_at),
+              }
+            : chat
+        )
+      );
+
+      setProjectThreadsById((prev) => ({
+        ...prev,
+        [currentChat.projectId]: (prev[currentChat.projectId] ?? []).map((thread) =>
+          thread.id === updated.id
+            ? {
+                ...thread,
+                title: updated.title,
+                execution_mode: updated.execution_mode,
+                updated_at: new Date(updated.updated_at),
+              }
+            : thread
+        ),
+      }));
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to switch mode';
+      setThreadModeError(message);
+    } finally {
+      setIsUpdatingThreadMode(false);
+    }
+  };
+
   const selectRepoFolder = async () => {
     const windowWithDirectoryPicker = window as Window & {
       showDirectoryPicker?: () => Promise<{ name: string; path?: string }>;
@@ -1362,6 +1418,33 @@ export function Ui6ChatbotPage() {
                     onVariantChange={handleVariantChange}
                     disabled={isTyping}
                   />
+                  <div className="mt-3 flex items-center justify-between rounded-md border border-[#2a2a2a] bg-[#111111] px-3 py-2 text-xs text-[#a1a1a1]">
+                    <div className="flex items-center gap-2">
+                      <span>Execution</span>
+                      <label className="flex items-center gap-1 rounded px-2 py-1 text-sm text-[#e5e5e5] transition-colors hover:bg-[#2a2a2a]">
+                        <select
+                          value={currentChat.executionMode}
+                          onChange={(event) =>
+                            void handleThreadModeChange(
+                              event.target.value as ChatThreadExecutionMode
+                            )
+                          }
+                          className="appearance-none border-0 bg-transparent outline-none"
+                          disabled={isTyping || isUpdatingThreadMode}
+                        >
+                          <option value="in_place">Local</option>
+                          <option value="isolated">Worktree</option>
+                        </select>
+                        <ChevronDown className="h-3 w-3 text-[#888888]" />
+                      </label>
+                    </div>
+                    {isUpdatingThreadMode ? (
+                      <span className="text-[#888888]">Switching...</span>
+                    ) : null}
+                  </div>
+                  {threadModeError ? (
+                    <p className="mt-2 text-xs text-[#ff8f8f]">{threadModeError}</p>
+                  ) : null}
                 </div>
               </div>
             </div>
