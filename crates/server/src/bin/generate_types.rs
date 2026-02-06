@@ -127,6 +127,8 @@ fn generate_types_content() -> String {
         server::routes::task_attempts::OpenEditorRequest::decl(),
         server::routes::task_attempts::OpenEditorResponse::decl(),
         server::routes::tasks::CreateAndStartTaskRequest::decl(),
+        server::routes::new_ui::CreateThreadRequest::decl(),
+        server::routes::new_ui::SendThreadMessageRequest::decl(),
         server::routes::task_attempts::pr::CreatePrApiRequest::decl(),
         server::routes::images::ImageResponse::decl(),
         server::routes::images::ImageMetadata::decl(),

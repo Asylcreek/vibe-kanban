@@ -116,7 +116,9 @@ impl ChatThread {
         id: Uuid,
         payload: &UpdateChatThread,
     ) -> Result<Self, ChatThreadError> {
-        let existing = Self::find_by_id(pool, id).await?.ok_or(ChatThreadError::NotFound)?;
+        let existing = Self::find_by_id(pool, id)
+            .await?
+            .ok_or(ChatThreadError::NotFound)?;
 
         let title = payload.title.clone().unwrap_or(existing.title);
         let execution_mode = payload

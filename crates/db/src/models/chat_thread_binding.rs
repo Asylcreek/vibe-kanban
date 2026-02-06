@@ -72,11 +72,14 @@ impl ChatThreadBinding {
         .await
     }
 
-    pub async fn delete_by_thread_id(pool: &SqlitePool, thread_id: Uuid) -> Result<u64, sqlx::Error> {
+    pub async fn delete_by_thread_id(
+        pool: &SqlitePool,
+        thread_id: Uuid,
+    ) -> Result<u64, sqlx::Error> {
         let result = sqlx::query("DELETE FROM chat_thread_bindings WHERE thread_id = $1")
             .bind(thread_id)
-        .execute(pool)
-        .await?;
+            .execute(pool)
+            .await?;
         Ok(result.rows_affected())
     }
 }

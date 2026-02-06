@@ -21,11 +21,11 @@ Deliverable:
 - Persistent project-scoped threads with execution-mode metadata.
 
 ## Phase 2: Backend Thread APIs
-- [ ] Add new `/api/new-ui/...` routes in `crates/server/src/routes/`.
-- [ ] Implement list/create/update thread endpoints.
-- [ ] Implement send-message endpoint that dispatches by `execution_mode`.
-- [ ] Add stream endpoint or map existing process stream by returned process id.
-- [ ] Register router in `routes/mod.rs`.
+- [x] Add new `/api/new-ui/...` routes in `crates/server/src/routes/`.
+- [x] Implement list/create/update thread endpoints.
+- [x] Implement send-message endpoint that dispatches by `execution_mode`.
+- [x] Add stream endpoint or map existing process stream by returned process id.
+- [x] Register router in `routes/mod.rs`.
 
 Deliverable:
 - New API surface for `/new-ui` thread CRUD + send.

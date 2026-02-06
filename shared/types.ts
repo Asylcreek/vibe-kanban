@@ -298,6 +298,10 @@ export type OpenEditorResponse = { url: string | null, };
 
 export type CreateAndStartTaskRequest = { task: CreateTask, executor_profile_id: ExecutorProfileId, repos: Array<WorkspaceRepoInput>, };
 
+export type CreateThreadRequest = { title: string, execution_mode: ChatThreadExecutionMode | null, };
+
+export type SendThreadMessageRequest = { prompt: string, executor_profile_id: ExecutorProfileId, retry_process_id: string | null, force_when_dirty: boolean | null, perform_git_reset: boolean | null, };
+
 export type CreatePrApiRequest = { title: string, body: string | null, target_branch: string | null, draft: boolean | null, repo_id: string, auto_generate_description: boolean, };
 
 export type ImageResponse = { id: string, file_path: string, original_name: string, mime_type: string | null, size_bytes: bigint, hash: string, created_at: string, updated_at: string, };

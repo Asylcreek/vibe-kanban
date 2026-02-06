@@ -5,7 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use db::models::{
-    execution_process::ExecutionProcessError, project::ProjectError,
+    chat_thread::ChatThreadError, execution_process::ExecutionProcessError, project::ProjectError,
     project_repo::ProjectRepoError, repo::RepoError, scratch::ScratchError, session::SessionError,
     workspace::WorkspaceError,
 };
@@ -39,6 +39,8 @@ pub enum ApiError {
     Workspace(#[from] WorkspaceError),
     #[error(transparent)]
     Session(#[from] SessionError),
+    #[error(transparent)]
+    ChatThread(#[from] ChatThreadError),
     #[error(transparent)]
     ScratchError(#[from] ScratchError),
     #[error(transparent)]
@@ -286,6 +288,12 @@ impl IntoResponse for ApiError {
                         expected, actual
                     ),
                 )
+            }
+            ApiError::ChatThread(ChatThreadError::Database(_)) => {
+                ErrorInfo::internal("ChatThreadError")
+            }
+            ApiError::ChatThread(ChatThreadError::NotFound) => {
+                ErrorInfo::not_found("ChatThreadError", "Chat thread not found.")
             }
 
             ApiError::ScratchError(ScratchError::Database(_)) => {
