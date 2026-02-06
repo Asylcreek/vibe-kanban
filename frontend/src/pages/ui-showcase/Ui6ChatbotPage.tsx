@@ -8,6 +8,7 @@ import {
   File,
   FileCode,
   FileText,
+  GitBranch as GitBranchIcon,
   Grid3X3,
   GraduationCap,
   Menu,
@@ -31,7 +32,7 @@ import {
 } from 'shared/types';
 import { useUserSystem } from '@/components/ConfigProvider';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { newUiApi, projectsApi } from '@/lib/api';
+import { newUiApi, projectsApi, repoApi } from '@/lib/api';
 import { getVariantOptions } from '@/utils/executor';
 import { streamJsonPatchEntries } from '@/utils/streamJsonPatchEntries';
 
@@ -255,6 +256,11 @@ function Ui6Welcome({
   variantOptions,
   onExecutorChange,
   onVariantChange,
+  currentMode,
+  onModeChange,
+  isUpdatingMode,
+  modeError,
+  currentBranch,
   disabled,
 }: {
   onSendMessage: (message: string) => void;
@@ -264,6 +270,11 @@ function Ui6Welcome({
   variantOptions: string[];
   onExecutorChange: (executor: BaseCodingAgent) => void;
   onVariantChange: (variant: string | null) => void;
+  currentMode: ChatThreadExecutionMode | null;
+  onModeChange: (mode: ChatThreadExecutionMode) => void;
+  isUpdatingMode: boolean;
+  modeError: string | null;
+  currentBranch: string | null;
   disabled?: boolean;
 }) {
   const actions = [
@@ -359,9 +370,62 @@ function Ui6Welcome({
             onVariantChange={onVariantChange}
             disabled={disabled}
           />
+          <Ui6ExecutionBar
+            currentMode={currentMode}
+            onModeChange={onModeChange}
+            isUpdatingMode={isUpdatingMode}
+            modeError={modeError}
+            currentBranch={currentBranch}
+            disabled={disabled}
+          />
         </div>
       </div>
     </div>
+  );
+}
+
+function Ui6ExecutionBar({
+  currentMode,
+  onModeChange,
+  isUpdatingMode,
+  modeError,
+  currentBranch,
+  disabled,
+}: {
+  currentMode: ChatThreadExecutionMode | null;
+  onModeChange: (mode: ChatThreadExecutionMode) => void;
+  isUpdatingMode: boolean;
+  modeError: string | null;
+  currentBranch: string | null;
+  disabled?: boolean;
+}) {
+  if (!currentMode) return null;
+
+  return (
+    <>
+      <div className="mt-3 flex items-center justify-between px-1 py-1 text-xs text-[#a1a1a1]">
+        <label className="flex items-center gap-1 rounded px-1.5 py-1 text-sm text-[#e5e5e5] transition-colors hover:bg-[#2a2a2a]">
+          <select
+            value={currentMode}
+            onChange={(event) =>
+              onModeChange(event.target.value as ChatThreadExecutionMode)
+            }
+            className="appearance-none border-0 bg-transparent outline-none"
+            disabled={disabled || isUpdatingMode}
+          >
+            <option value="in_place">Local</option>
+            <option value="isolated">Worktree</option>
+          </select>
+          <ChevronDown className="h-3 w-3 text-[#888888]" />
+        </label>
+
+        <div className="flex items-center gap-2 text-sm text-[#d0d0d0]">
+          <GitBranchIcon className="h-3.5 w-3.5 text-[#8b8b8b]" />
+          <span>{currentBranch ?? 'unknown'}</span>
+        </div>
+      </div>
+      {modeError ? <p className="mt-1 text-xs text-[#ff8f8f]">{modeError}</p> : null}
+    </>
   );
 }
 
@@ -541,6 +605,7 @@ export function Ui6ChatbotPage() {
   const [projectThreadsById, setProjectThreadsById] = useState<
     Record<string, ProjectThread[]>
   >({});
+  const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [isUpdatingThreadMode, setIsUpdatingThreadMode] = useState(false);
   const [threadModeError, setThreadModeError] = useState<string | null>(null);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
@@ -625,6 +690,33 @@ export function Ui6ChatbotPage() {
   useEffect(() => {
     void loadProjects();
   }, []);
+
+  useEffect(() => {
+    const loadCurrentBranch = async () => {
+      if (!activeProjectId) {
+        setCurrentBranch(null);
+        return;
+      }
+      try {
+        const repos = await projectsApi.getRepositories(activeProjectId);
+        const firstRepo = repos[0];
+        if (!firstRepo) {
+          setCurrentBranch(null);
+          return;
+        }
+        const branches = await repoApi.getBranches(firstRepo.id);
+        const branch =
+          branches.find((item) => item.is_current)?.name ??
+          firstRepo.default_target_branch ??
+          null;
+        setCurrentBranch(branch);
+      } catch {
+        setCurrentBranch(null);
+      }
+    };
+
+    void loadCurrentBranch();
+  }, [activeProjectId, currentChat?.executionMode]);
 
   useEffect(() => {
     if (!messageScrollRef.current) return;
@@ -1418,33 +1510,16 @@ export function Ui6ChatbotPage() {
                     onVariantChange={handleVariantChange}
                     disabled={isTyping}
                   />
-                  <div className="mt-3 flex items-center justify-between rounded-md border border-[#2a2a2a] bg-[#111111] px-3 py-2 text-xs text-[#a1a1a1]">
-                    <div className="flex items-center gap-2">
-                      <span>Execution</span>
-                      <label className="flex items-center gap-1 rounded px-2 py-1 text-sm text-[#e5e5e5] transition-colors hover:bg-[#2a2a2a]">
-                        <select
-                          value={currentChat.executionMode}
-                          onChange={(event) =>
-                            void handleThreadModeChange(
-                              event.target.value as ChatThreadExecutionMode
-                            )
-                          }
-                          className="appearance-none border-0 bg-transparent outline-none"
-                          disabled={isTyping || isUpdatingThreadMode}
-                        >
-                          <option value="in_place">Local</option>
-                          <option value="isolated">Worktree</option>
-                        </select>
-                        <ChevronDown className="h-3 w-3 text-[#888888]" />
-                      </label>
-                    </div>
-                    {isUpdatingThreadMode ? (
-                      <span className="text-[#888888]">Switching...</span>
-                    ) : null}
-                  </div>
-                  {threadModeError ? (
-                    <p className="mt-2 text-xs text-[#ff8f8f]">{threadModeError}</p>
-                  ) : null}
+                  <Ui6ExecutionBar
+                    currentMode={currentChat.executionMode}
+                    onModeChange={(mode) => {
+                      void handleThreadModeChange(mode);
+                    }}
+                    isUpdatingMode={isUpdatingThreadMode}
+                    modeError={threadModeError}
+                    currentBranch={currentBranch}
+                    disabled={isTyping}
+                  />
                 </div>
               </div>
             </div>
@@ -1457,6 +1532,13 @@ export function Ui6ChatbotPage() {
               variantOptions={variantOptions}
               onExecutorChange={handleExecutorChange}
               onVariantChange={handleVariantChange}
+              currentMode={currentChat?.executionMode ?? null}
+              onModeChange={(mode) => {
+                void handleThreadModeChange(mode);
+              }}
+              isUpdatingMode={isUpdatingThreadMode}
+              modeError={threadModeError}
+              currentBranch={currentBranch}
               disabled={isTyping}
             />
           )}
