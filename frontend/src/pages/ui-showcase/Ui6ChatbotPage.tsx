@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUp,
   ChevronDown,
@@ -688,10 +688,6 @@ export function Ui6ChatbotPage() {
   }, [isMobile]);
 
   useEffect(() => {
-    void loadProjects();
-  }, []);
-
-  useEffect(() => {
     const loadCurrentBranch = async () => {
       if (!activeProjectId) {
         setCurrentBranch(null);
@@ -857,16 +853,16 @@ export function Ui6ChatbotPage() {
     );
   };
 
-  const loadProjects = async () => {
+  const loadProjects = useCallback(async () => {
     setIsLoadingProjects(true);
     setProjectsError(null);
 
     try {
       const loadedProjects = await projectsApi.list();
       setProjects(loadedProjects);
-      if (!activeProjectId && loadedProjects.length > 0) {
-        setActiveProjectId(loadedProjects[0].id);
-      }
+      setActiveProjectId((prev) =>
+        prev ?? (loadedProjects.length > 0 ? loadedProjects[0].id : null)
+      );
       setExpandedProjects((prev) => {
         const next = { ...prev };
         loadedProjects.forEach((project) => {
@@ -897,7 +893,11 @@ export function Ui6ChatbotPage() {
     } finally {
       setIsLoadingProjects(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    void loadProjects();
+  }, [loadProjects]);
 
   const sendToBackend = async (
     chat: Ui6Chat,

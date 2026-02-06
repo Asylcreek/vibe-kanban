@@ -154,3 +154,75 @@ impl ChatThread {
         Ok(result.rows_affected())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{
+        project::{CreateProject, Project},
+        project_repo::CreateProjectRepo,
+    };
+    use sqlx::SqlitePool;
+
+    #[sqlx::test]
+    async fn create_update_and_delete_chat_thread(pool: SqlitePool) {
+        let project_id = Uuid::new_v4();
+        let thread_id = Uuid::new_v4();
+        let _project = Project::create(
+            &pool,
+            &CreateProject {
+                name: "test-project".to_string(),
+                repositories: Vec::<CreateProjectRepo>::new(),
+            },
+            project_id,
+        )
+        .await
+        .expect("create project");
+
+        let created = ChatThread::create(
+            &pool,
+            &CreateChatThread {
+                project_id,
+                title: "Thread A".to_string(),
+                execution_mode: ChatThreadExecutionMode::InPlace,
+            },
+            thread_id,
+        )
+        .await
+        .expect("create thread");
+
+        assert_eq!(created.id, thread_id);
+        assert_eq!(created.project_id, project_id);
+        assert_eq!(created.execution_mode, ChatThreadExecutionMode::InPlace);
+
+        let listed = ChatThread::find_by_project_id(&pool, project_id)
+            .await
+            .expect("list by project");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, thread_id);
+
+        let updated = ChatThread::update(
+            &pool,
+            thread_id,
+            &UpdateChatThread {
+                title: Some("Thread B".to_string()),
+                execution_mode: Some(ChatThreadExecutionMode::Isolated),
+            },
+        )
+        .await
+        .expect("update thread");
+
+        assert_eq!(updated.title, "Thread B");
+        assert_eq!(updated.execution_mode, ChatThreadExecutionMode::Isolated);
+
+        let rows = ChatThread::delete(&pool, thread_id)
+            .await
+            .expect("delete thread");
+        assert_eq!(rows, 1);
+
+        let fetched = ChatThread::find_by_id(&pool, thread_id)
+            .await
+            .expect("find by id");
+        assert!(fetched.is_none());
+    }
+}

@@ -83,3 +83,87 @@ impl ChatThreadBinding {
         Ok(result.rows_affected())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{
+        chat_thread::{ChatThread, ChatThreadExecutionMode, CreateChatThread},
+        project::{CreateProject, Project},
+        project_repo::CreateProjectRepo,
+    };
+    use sqlx::SqlitePool;
+
+    #[sqlx::test]
+    async fn upsert_find_and_delete_binding(pool: SqlitePool) {
+        let project_id = Uuid::new_v4();
+        let thread_id = Uuid::new_v4();
+        let _project = Project::create(
+            &pool,
+            &CreateProject {
+                name: "test-project".to_string(),
+                repositories: Vec::<CreateProjectRepo>::new(),
+            },
+            project_id,
+        )
+        .await
+        .expect("create project");
+        let _thread = ChatThread::create(
+            &pool,
+            &CreateChatThread {
+                project_id,
+                title: "thread".to_string(),
+                execution_mode: ChatThreadExecutionMode::InPlace,
+            },
+            thread_id,
+        )
+        .await
+        .expect("create thread");
+
+        let inserted = ChatThreadBinding::upsert(
+            &pool,
+            &UpsertChatThreadBinding {
+                thread_id,
+                session_id: None,
+                workspace_id: None,
+            },
+        )
+        .await
+        .expect("insert binding");
+
+        assert_eq!(inserted.thread_id, thread_id);
+        assert_eq!(inserted.session_id, None);
+        assert_eq!(inserted.workspace_id, None);
+
+        let updated = ChatThreadBinding::upsert(
+            &pool,
+            &UpsertChatThreadBinding {
+                thread_id,
+                session_id: None,
+                workspace_id: None,
+            },
+        )
+        .await
+        .expect("update binding");
+
+        assert_eq!(updated.session_id, None);
+        assert_eq!(updated.workspace_id, None);
+
+        let fetched = ChatThreadBinding::find_by_thread_id(&pool, thread_id)
+            .await
+            .expect("find binding")
+            .expect("binding exists");
+        assert_eq!(fetched.session_id, None);
+        assert_eq!(fetched.workspace_id, None);
+
+        let rows = ChatThreadBinding::delete_by_thread_id(&pool, thread_id)
+            .await
+            .expect("delete binding");
+        assert_eq!(rows, 1);
+
+        let missing = ChatThreadBinding::find_by_thread_id(&pool, thread_id)
+            .await
+            .expect("find missing binding");
+        assert!(missing.is_none());
+    }
+}

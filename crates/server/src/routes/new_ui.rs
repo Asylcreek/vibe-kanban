@@ -320,31 +320,31 @@ pub async fn update_thread(
         .await?
         .ok_or(ChatThreadError::NotFound)?;
 
-    if let Some(next_mode) = payload.execution_mode.clone() {
-        if next_mode != existing.execution_mode {
-            let project = Project::find_by_id(pool, existing.project_id)
-                .await?
-                .ok_or_else(|| ApiError::BadRequest("Project not found".to_string()))?;
-            let target_workspace = match next_mode {
-                ChatThreadExecutionMode::InPlace => {
-                    ensure_project_shared_workspace(&deployment, project.id, &project.name).await?
-                }
-                ChatThreadExecutionMode::Isolated => {
-                    provision_isolated_workspace_for_thread(&deployment, &existing).await?
-                }
-            };
+    if let Some(next_mode) = payload.execution_mode.clone()
+        && next_mode != existing.execution_mode
+    {
+        let project = Project::find_by_id(pool, existing.project_id)
+            .await?
+            .ok_or_else(|| ApiError::BadRequest("Project not found".to_string()))?;
+        let target_workspace = match next_mode {
+            ChatThreadExecutionMode::InPlace => {
+                ensure_project_shared_workspace(&deployment, project.id, &project.name).await?
+            }
+            ChatThreadExecutionMode::Isolated => {
+                provision_isolated_workspace_for_thread(&deployment, &existing).await?
+            }
+        };
 
-            // Session is mode/workspace-specific; clear it on mode switch.
-            ChatThreadBinding::upsert(
-                pool,
-                &UpsertChatThreadBinding {
-                    thread_id: existing.id,
-                    session_id: None,
-                    workspace_id: Some(target_workspace.id),
-                },
-            )
-            .await?;
-        }
+        // Session is mode/workspace-specific; clear it on mode switch.
+        ChatThreadBinding::upsert(
+            pool,
+            &UpsertChatThreadBinding {
+                thread_id: existing.id,
+                session_id: None,
+                workspace_id: Some(target_workspace.id),
+            },
+        )
+        .await?;
     }
 
     let updated = ChatThread::update(pool, thread_id, &payload).await?;
