@@ -33,6 +33,7 @@ import {
   type Project,
 } from 'shared/types';
 import { useUserSystem } from '@/components/ConfigProvider';
+import WYSIWYGEditor from '@/components/ui/wysiwyg';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { executionProcessesApi, newUiApi, projectsApi, repoApi } from '@/lib/api';
 import { getVariantOptions } from '@/utils/executor';
@@ -58,6 +59,13 @@ interface Ui6Chat {
 }
 
 const DROID_EXECUTOR = BaseCodingAgent.DROID;
+const NEW_UI_THREAD_PREFS_KEY = 'new_ui_thread_executor_prefs_v1';
+const NEW_UI_DRAFT_PREFS_KEY = 'new_ui_draft_executor_prefs_v1';
+
+interface ExecutorPrefs {
+  executor: BaseCodingAgent | null;
+  variant: string | null;
+}
 
 function toUiMessage(message: ChatThreadMessage): Ui6Message {
   return {
@@ -69,16 +77,57 @@ function toUiMessage(message: ChatThreadMessage): Ui6Message {
 }
 
 function extractAssistantText(entries: PatchType[]): string {
-  return entries
+  const assistantEntries = entries
     .filter(
       (entry): entry is Extract<PatchType, { type: 'NORMALIZED_ENTRY' }> =>
         entry.type === 'NORMALIZED_ENTRY' &&
         entry.content.entry_type.type === 'assistant_message'
     )
     .map((entry) => entry.content.content.trim())
-    .filter(Boolean)
-    .join('\n\n')
-    .trim();
+    .filter(Boolean);
+
+  return assistantEntries[assistantEntries.length - 1] ?? '';
+}
+
+function readThreadPrefs(): Record<string, ExecutorPrefs> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(NEW_UI_THREAD_PREFS_KEY) ?? '{}'
+    ) as Record<string, ExecutorPrefs>;
+    return parsed ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function writeThreadPrefs(threadId: string, prefs: ExecutorPrefs) {
+  if (typeof window === 'undefined') return;
+  const current = readThreadPrefs();
+  current[threadId] = prefs;
+  window.localStorage.setItem(NEW_UI_THREAD_PREFS_KEY, JSON.stringify(current));
+}
+
+function readDraftPrefs(): ExecutorPrefs {
+  if (typeof window === 'undefined') {
+    return { executor: null, variant: null };
+  }
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(NEW_UI_DRAFT_PREFS_KEY) ?? '{}'
+    ) as ExecutorPrefs;
+    return {
+      executor: parsed?.executor ?? null,
+      variant: parsed?.variant ?? null,
+    };
+  } catch {
+    return { executor: null, variant: null };
+  }
+}
+
+function writeDraftPrefs(prefs: ExecutorPrefs) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(NEW_UI_DRAFT_PREFS_KEY, JSON.stringify(prefs));
 }
 
 interface Ui6ChatInputProps {
@@ -112,7 +161,7 @@ function Ui6ChatInput({
 
   return (
     <div className="w-full">
-      <div className="relative rounded-lg border border-[#333333] bg-[#1a1a1a] transition-colors focus-within:border-[#444444]">
+      <div className="flex flex-col rounded-lg border border-[#333333] bg-[#1a1a1a] transition-colors focus-within:border-[#444444]">
         <textarea
           value={message}
           onChange={(event) => setMessage(event.target.value)}
@@ -123,11 +172,11 @@ function Ui6ChatInput({
             }
           }}
           placeholder="Ask for follow-up changes"
-          className="min-h-[120px] w-full resize-none border-0 bg-transparent px-4 pb-14 pt-4 text-sm text-[#e5e5e5] placeholder:text-[#666666] outline-none"
+          className="min-h-[110px] max-h-[220px] w-full resize-none overflow-y-auto border-0 bg-transparent px-4 pt-4 text-sm text-[#e5e5e5] placeholder:text-[#666666] outline-none"
           disabled={disabled}
         />
 
-        <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between border-t border-[#2a2a2a] px-3 py-2">
+        <div className="flex flex-shrink-0 items-center justify-between border-t border-[#2a2a2a] px-3 py-2">
           <div className="flex items-center gap-1">
             <button
               type="button"
@@ -226,7 +275,15 @@ function Ui6ChatMessage({ message }: { message: Ui6Message }) {
             </span>
           </div>
           <div className="whitespace-pre-wrap break-words text-[#d6d6d6] leading-relaxed">
-            {message.text}
+            {message.isUser ? (
+              message.text
+            ) : (
+              <WYSIWYGEditor
+                value={message.text}
+                disabled
+                className="min-h-0 bg-transparent p-0 text-[#d6d6d6] [&_p]:mb-2 [&_p:last-child]:mb-0"
+              />
+            )}
           </div>
         </div>
       </div>
@@ -624,10 +681,13 @@ export function Ui6ChatbotPage() {
   const [expandedProjects, setExpandedProjects] = useState<
     Record<string, boolean>
   >({});
+  const initialDraftPrefs = useMemo(() => readDraftPrefs(), []);
   const [draftExecutor, setDraftExecutor] = useState<BaseCodingAgent | null>(
-    null
+    initialDraftPrefs.executor
   );
-  const [draftVariant, setDraftVariant] = useState<string | null>(null);
+  const [draftVariant, setDraftVariant] = useState<string | null>(
+    initialDraftPrefs.variant
+  );
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(256);
   const [rightSidebarWidth, setRightSidebarWidth] = useState(320);
 
@@ -690,6 +750,10 @@ export function Ui6ChatbotPage() {
       setDraftVariant(fallbackVariant);
     }
   }, [draftVariant, fallbackVariant]);
+
+  useEffect(() => {
+    writeDraftPrefs({ executor: draftExecutor, variant: draftVariant });
+  }, [draftExecutor, draftVariant]);
 
   useEffect(() => {
     return () => {
@@ -802,6 +866,17 @@ export function Ui6ChatbotPage() {
     const now = new Date();
     const defaultExecutor = fallbackExecutor;
     const defaultVariant = getVariantOptions(defaultExecutor, profiles)[0] ?? null;
+    const savedPrefs = readThreadPrefs()[thread.id];
+    const savedExecutor = savedPrefs?.executor;
+    const hasSavedExecutor =
+      savedExecutor !== null && executorOptions.includes(savedExecutor);
+    const savedVariants = getVariantOptions(savedExecutor, profiles);
+    const persistedExecutor =
+      hasSavedExecutor ? savedExecutor : null;
+    const persistedVariant =
+      persistedExecutor && savedPrefs?.variant && savedVariants.includes(savedPrefs.variant)
+        ? savedPrefs.variant
+        : null;
 
     let chatToUse: Ui6Chat;
     setChats((prev) => {
@@ -811,6 +886,8 @@ export function Ui6ChatbotPage() {
           ...existing,
           title: thread.title,
           executionMode: thread.execution_mode,
+          selectedExecutor: existing.selectedExecutor ?? persistedExecutor,
+          selectedVariant: existing.selectedVariant ?? persistedVariant,
           updatedAt: new Date(thread.updated_at),
         };
         chatToUse = updatedExisting;
@@ -823,8 +900,8 @@ export function Ui6ChatbotPage() {
         title: thread.title,
         executionMode: thread.execution_mode,
         messages: initialMessages,
-        selectedExecutor: defaultExecutor,
-        selectedVariant: defaultVariant,
+        selectedExecutor: persistedExecutor ?? defaultExecutor,
+        selectedVariant: persistedVariant ?? defaultVariant,
         createdAt: now,
         updatedAt: now,
       };
@@ -1149,6 +1226,10 @@ export function Ui6ChatbotPage() {
           draftExecutor ?? newChat.selectedExecutor ?? fallbackExecutor;
         const selectedVariant =
           draftVariant ?? newChat.selectedVariant ?? fallbackVariant;
+        writeThreadPrefs(newChat.id, {
+          executor: selectedExecutor,
+          variant: selectedVariant,
+        });
 
         setChats((prev) =>
           prev.map((chat) =>
@@ -1177,41 +1258,13 @@ export function Ui6ChatbotPage() {
     setChats((prev) =>
       prev.map((chat) => {
         if (chat.id !== currentChat.id) return chat;
-        const nextTitle =
-          chat.messages.length === 0
-            ? trimmed.slice(0, 50) + (trimmed.length > 50 ? '...' : '')
-            : chat.title;
         return {
           ...chat,
-          title: nextTitle,
           updatedAt: new Date(),
           messages: [...chat.messages, userMessage],
         };
       })
     );
-
-    if (currentChat.messages.length === 0 && currentChat.title !== trimmed) {
-      void newUiApi
-        .updateThread(currentChat.id, {
-          title: trimmed.slice(0, 50) + (trimmed.length > 50 ? '...' : ''),
-          execution_mode: null,
-        })
-        .then((thread) => {
-          setProjectThreadsById((prev) => ({
-            ...prev,
-            [currentChat.projectId]: (prev[currentChat.projectId] ?? []).map((item) =>
-              item.id === thread.id
-                ? {
-                    ...item,
-                    title: thread.title,
-                    updated_at: new Date(thread.updated_at),
-                  }
-                : item
-            ),
-          }));
-        })
-        .catch(() => {});
-    }
 
     void sendToBackend(
       currentChat,
@@ -1228,6 +1281,7 @@ export function Ui6ChatbotPage() {
       setDraftVariant(nextVariant);
       return;
     }
+    writeThreadPrefs(currentChat.id, { executor, variant: nextVariant });
     setChats((prev) =>
       prev.map((chat) =>
         chat.id === currentChat.id
@@ -1246,6 +1300,10 @@ export function Ui6ChatbotPage() {
       setDraftVariant(variant);
       return;
     }
+    writeThreadPrefs(currentChat.id, {
+      executor: currentChat.selectedExecutor,
+      variant,
+    });
     setChats((prev) =>
       prev.map((chat) =>
         chat.id === currentChat.id
@@ -1590,7 +1648,7 @@ export function Ui6ChatbotPage() {
           />
         )}
 
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="z-10 flex flex-shrink-0 items-center gap-2 border-b border-[#1a1a1a] bg-[#0d0d0d] px-4 py-3">
             <button
               type="button"
@@ -1635,8 +1693,8 @@ export function Ui6ChatbotPage() {
           </div>
 
           {currentChat && currentChat.messages.length > 0 ? (
-            <div className="flex h-full flex-col bg-[#0d0d0d]">
-              <div ref={messageScrollRef} className="flex-1 overflow-y-auto">
+            <div className="flex h-full min-h-0 flex-col bg-[#0d0d0d]">
+              <div ref={messageScrollRef} className="min-h-0 flex-1 overflow-y-auto">
                 <div className="mx-auto max-w-4xl px-6 py-8">
                   {currentChat.messages.map((message) => (
                     <Ui6ChatMessage key={message.id} message={message} />

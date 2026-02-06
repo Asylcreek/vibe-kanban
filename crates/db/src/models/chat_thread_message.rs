@@ -95,56 +95,31 @@ impl ChatThreadMessage {
         execution_process_id: Uuid,
         content: String,
     ) -> Result<Self, sqlx::Error> {
-        let existing = sqlx::query_as::<_, ChatThreadMessage>(
-            r#"SELECT id,
-                      thread_id,
-                      role,
-                      content,
-                      execution_process_id,
-                      created_at,
-                      updated_at
-               FROM chat_thread_messages
-               WHERE thread_id = $1
-                 AND role = 'assistant'
-                 AND execution_process_id = $2
-               ORDER BY created_at DESC
-               LIMIT 1"#,
+        sqlx::query_as::<_, ChatThreadMessage>(
+            r#"INSERT INTO chat_thread_messages (
+                    id,
+                    thread_id,
+                    role,
+                    content,
+                    execution_process_id
+               )
+               VALUES ($1, $2, 'assistant', $3, $4)
+               ON CONFLICT(thread_id, role, execution_process_id) DO UPDATE SET
+                    content = excluded.content,
+                    updated_at = datetime('now', 'subsec')
+               RETURNING id,
+                         thread_id,
+                         role,
+                         content,
+                         execution_process_id,
+                         created_at,
+                         updated_at"#,
         )
+        .bind(Uuid::new_v4())
         .bind(thread_id)
+        .bind(content)
         .bind(execution_process_id)
-        .fetch_optional(pool)
-        .await?;
-
-        if let Some(message) = existing {
-            return sqlx::query_as::<_, ChatThreadMessage>(
-                r#"UPDATE chat_thread_messages
-                   SET content = $2,
-                       updated_at = datetime('now', 'subsec')
-                   WHERE id = $1
-                   RETURNING id,
-                             thread_id,
-                             role,
-                             content,
-                             execution_process_id,
-                             created_at,
-                             updated_at"#,
-            )
-            .bind(message.id)
-            .bind(content)
-            .fetch_one(pool)
-            .await;
-        }
-
-        Self::create(
-            pool,
-            &CreateChatThreadMessage {
-                thread_id,
-                role: ChatThreadMessageRole::Assistant,
-                content,
-                execution_process_id: Some(execution_process_id),
-            },
-            Uuid::new_v4(),
-        )
+        .fetch_one(pool)
         .await
     }
 }
