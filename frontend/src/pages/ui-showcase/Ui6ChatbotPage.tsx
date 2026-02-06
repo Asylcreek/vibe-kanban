@@ -378,9 +378,15 @@ function Ui6Welcome({
 function Ui6RightSidebar({
   isOpen,
   onClose,
+  width,
+  isMobile,
+  onResizeStart,
 }: {
   isOpen: boolean;
   onClose: () => void;
+  width: number;
+  isMobile: boolean;
+  onResizeStart: (event: React.PointerEvent<HTMLDivElement>) => void;
 }) {
   const [activeTab, setActiveTab] = useState<'artifacts' | 'files'>('artifacts');
 
@@ -413,7 +419,21 @@ function Ui6RightSidebar({
         aria-label="Close details"
       />
 
-      <aside className="fixed right-0 top-0 z-50 flex h-screen w-80 flex-col border-l border-[#333333] bg-[#0d0d0d] md:relative md:z-auto">
+      <aside
+        className={`fixed right-0 top-0 z-50 flex h-screen flex-col border-l border-[#333333] bg-[#0d0d0d] md:relative md:z-auto ${
+          isMobile ? 'w-80' : ''
+        }`}
+        style={!isMobile ? { width: `${width}px` } : undefined}
+      >
+        {!isMobile && (
+          <div
+            role="separator"
+            aria-label="Resize right sidebar"
+            aria-orientation="vertical"
+            onPointerDown={onResizeStart}
+            className="absolute left-0 top-0 h-full w-1 -translate-x-1/2 cursor-col-resize bg-transparent transition-colors hover:bg-[#525252]"
+          />
+        )}
         <div className="flex items-center justify-between border-b border-[#333333] px-4 py-3">
           <h2 className="font-medium text-[#e5e5e5]">Details</h2>
           <button
@@ -538,11 +558,18 @@ export function Ui6ChatbotPage() {
     null
   );
   const [draftVariant, setDraftVariant] = useState<string | null>(null);
+  const [leftSidebarWidth, setLeftSidebarWidth] = useState(256);
+  const [rightSidebarWidth, setRightSidebarWidth] = useState(320);
 
   const messageScrollRef = useRef<HTMLDivElement | null>(null);
   const activeStreamRef = useRef<ReturnType<
     typeof streamJsonPatchEntries<PatchType>
   > | null>(null);
+  const activeResizeRef = useRef<{
+    side: 'left' | 'right';
+    startX: number;
+    startWidth: number;
+  } | null>(null);
 
   const currentChat = useMemo(
     () => chats.find((chat) => chat.id === currentChatId) ?? null,
@@ -641,6 +668,63 @@ export function Ui6ChatbotPage() {
     if (!messageScrollRef.current) return;
     messageScrollRef.current.scrollTop = messageScrollRef.current.scrollHeight;
   }, [currentChat?.messages, isTyping]);
+
+  useEffect(() => {
+    const LEFT_MIN = 220;
+    const LEFT_MAX = 420;
+    const RIGHT_MIN = 280;
+    const RIGHT_MAX = 520;
+
+    const clamp = (value: number, min: number, max: number) =>
+      Math.min(max, Math.max(min, value));
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const activeResize = activeResizeRef.current;
+      if (!activeResize) return;
+
+      if (activeResize.side === 'left') {
+        const delta = event.clientX - activeResize.startX;
+        setLeftSidebarWidth(
+          clamp(activeResize.startWidth + delta, LEFT_MIN, LEFT_MAX)
+        );
+        return;
+      }
+
+      const delta = activeResize.startX - event.clientX;
+      setRightSidebarWidth(
+        clamp(activeResize.startWidth + delta, RIGHT_MIN, RIGHT_MAX)
+      );
+    };
+
+    const handlePointerUp = () => {
+      activeResizeRef.current = null;
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, []);
+
+  const startResize = (
+    side: 'left' | 'right',
+    event: React.PointerEvent<HTMLDivElement>
+  ) => {
+    if (isMobile) return;
+
+    activeResizeRef.current = {
+      side,
+      startX: event.clientX,
+      startWidth: side === 'left' ? leftSidebarWidth : rightSidebarWidth,
+    };
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+  };
 
   const createChat = (title = 'New Chat', initialMessages: Ui6Message[] = []) => {
     const now = new Date();
@@ -1068,9 +1152,10 @@ export function Ui6ChatbotPage() {
           className={`
             z-40 h-screen flex-shrink-0 border-r border-[#2a2a2a] bg-[#171717]
             transition-transform duration-200 md:relative md:translate-x-0
-            ${isMobile ? 'fixed left-0 top-0 w-64' : 'w-64'}
+            ${isMobile ? 'fixed left-0 top-0 w-64' : ''}
             ${isLeftSidebarOpen ? 'translate-x-0' : '-translate-x-full md:hidden'}
           `}
+          style={!isMobile ? { width: `${leftSidebarWidth}px` } : undefined}
         >
           <div className="space-y-2 p-3">
             <button
@@ -1202,6 +1287,16 @@ export function Ui6ChatbotPage() {
           </div>
         </aside>
 
+        {!isMobile && isLeftSidebarOpen && (
+          <div
+            role="separator"
+            aria-label="Resize left sidebar"
+            aria-orientation="vertical"
+            onPointerDown={(event) => startResize('left', event)}
+            className="z-20 h-full w-1 -translate-x-1/2 cursor-col-resize bg-transparent transition-colors hover:bg-[#525252]"
+          />
+        )}
+
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="z-10 flex flex-shrink-0 items-center gap-2 border-b border-[#1a1a1a] bg-[#0d0d0d] px-4 py-3">
             <button
@@ -1283,6 +1378,9 @@ export function Ui6ChatbotPage() {
         <Ui6RightSidebar
           isOpen={isRightSidebarOpen}
           onClose={() => setIsRightSidebarOpen(false)}
+          width={rightSidebarWidth}
+          isMobile={isMobile}
+          onResizeStart={(event) => startResize('right', event)}
         />
 
         {isCreateProjectModalOpen && (
