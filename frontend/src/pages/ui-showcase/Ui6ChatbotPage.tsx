@@ -1605,25 +1605,45 @@ export function Ui6ChatbotPage() {
 
                     return (
                       <div key={project.id}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActiveProjectId(project.id);
-                            toggleProjectExpanded(project.id);
-                          }}
-                          className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-[#2a2a2a] ${
-                            activeProjectId === project.id
-                              ? 'bg-[#222222] text-[#f5f5f5]'
-                              : 'text-[#e5e5e5]'
+                        <div
+                          className={`group flex w-full items-center gap-1 rounded transition-colors hover:bg-[#2a2a2a] ${
+                            activeProjectId === project.id ? 'bg-[#222222]' : ''
                           }`}
                         >
-                          {isExpanded ? (
-                            <ChevronDown className="h-3 w-3 flex-shrink-0" />
-                          ) : (
-                            <ChevronRight className="h-3 w-3 flex-shrink-0" />
-                          )}
-                          <span className="flex-1 truncate">{project.name}</span>
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveProjectId(project.id);
+                              toggleProjectExpanded(project.id);
+                            }}
+                            className={`flex min-w-0 flex-1 items-center gap-2 rounded px-2 py-1.5 text-left text-sm ${
+                              activeProjectId === project.id
+                                ? 'text-[#f5f5f5]'
+                                : 'text-[#e5e5e5]'
+                            }`}
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="h-3 w-3 flex-shrink-0" />
+                            ) : (
+                              <ChevronRight className="h-3 w-3 flex-shrink-0" />
+                            )}
+                            <span className="flex-1 truncate">{project.name}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setActiveProjectId(project.id);
+                              void handleCreateThread(project.id);
+                            }}
+                            className="pointer-events-none mr-1 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-[#a1a1a1] opacity-0 transition-all hover:bg-[#343434] hover:text-[#f5f5f5] group-hover:pointer-events-auto group-hover:opacity-100 focus:pointer-events-auto focus:opacity-100 focus:outline-none"
+                            aria-label={`Create thread in ${project.name}`}
+                            title={`Create thread in ${project.name}`}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
 
                         {isExpanded && (
                           <div className="ml-4 mt-0.5 space-y-0.5">
