@@ -41,3 +41,20 @@ Do not manually edit shared/types.ts, instead edit crates/server/src/bin/generat
 ## Security & Config Tips
 - Use `.env` for local overrides; never commit secrets. Key envs: `FRONTEND_PORT`, `BACKEND_PORT`, `HOST` 
 - Dev ports and assets are managed by `scripts/setup-dev-environment.js`.
+
+## Backend Reality (Important)
+- This backend is local CLI orchestration, not generic chat-only backend.
+- Current execution chain is `session -> workspace -> execution_process -> executor CLI`.
+- Current session APIs require `workspace_id` (`/api/sessions` create and follow-up flow).
+- Workspace creation currently requires `task_id` and repos (`/api/task-attempts` create).
+- Workspaces are worktree-backed isolation units and are created/ensured by container services.
+- `/new-ui` is currently a showcase route (`/new-ui -> Ui6ChatbotPage`) and should not be treated as production architecture.
+
+## /new-ui Product Guardrails (Agreed)
+- `/new-ui` UX must not expose tasks.
+- Threads are scoped to projects.
+- Each project is assumed to have one repo.
+- Concurrency is allowed, including concurrent runs in the same project/repo.
+- Worktree isolation must be opt-in per thread (not default).
+- Do not show “create workspace first” errors in `/new-ui`.
+- Prefer adding dedicated `/new-ui` thread APIs and execution routing instead of forcing legacy task/workspace UX into `/new-ui`.
