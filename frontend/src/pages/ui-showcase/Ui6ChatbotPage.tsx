@@ -130,6 +130,37 @@ function writeDraftPrefs(prefs: ExecutorPrefs) {
   window.localStorage.setItem(NEW_UI_DRAFT_PREFS_KEY, JSON.stringify(prefs));
 }
 
+function assistantInitial(label: string): string {
+  const trimmed = label.trim();
+  return trimmed.length > 0 ? trimmed[0]!.toUpperCase() : 'A';
+}
+
+function executorDisplayName(executor: BaseCodingAgent | null): string {
+  if (!executor) return 'Assistant';
+  switch (executor) {
+    case BaseCodingAgent.CLAUDE_CODE:
+      return 'Claude';
+    case BaseCodingAgent.CODEX:
+      return 'Codex';
+    case BaseCodingAgent.GEMINI:
+      return 'Gemini';
+    case BaseCodingAgent.DROID:
+      return 'DROID';
+    case BaseCodingAgent.CURSOR_AGENT:
+      return 'Cursor';
+    case BaseCodingAgent.COPILOT:
+      return 'Copilot';
+    case BaseCodingAgent.AMP:
+      return 'Amp';
+    case BaseCodingAgent.OPENCODE:
+      return 'Opencode';
+    case BaseCodingAgent.QWEN_CODE:
+      return 'Qwen';
+    default:
+      return String(executor);
+  }
+}
+
 interface Ui6ChatInputProps {
   onSendMessage: (message: string) => void;
   selectedExecutor: BaseCodingAgent | null;
@@ -248,7 +279,14 @@ function Ui6ChatInput({
   );
 }
 
-function Ui6ChatMessage({ message }: { message: Ui6Message }) {
+function Ui6ChatMessage({
+  message,
+  assistantLabel,
+}: {
+  message: Ui6Message;
+  assistantLabel: string;
+}) {
+  const assistantBadge = assistantInitial(assistantLabel);
   return (
     <div
       className={`px-6 py-6 transition-colors ${
@@ -259,13 +297,13 @@ function Ui6ChatMessage({ message }: { message: Ui6Message }) {
     >
       <div className="flex max-w-none gap-4">
         <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-orange-600 text-white">
-          {message.isUser ? <User className="h-4 w-4" /> : 'C'}
+          {message.isUser ? <User className="h-4 w-4" /> : assistantBadge}
         </div>
 
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex items-center gap-2">
             <span className="text-sm font-medium text-[#e5e5e5]">
-              {message.isUser ? 'You' : 'Claude'}
+              {message.isUser ? 'You' : assistantLabel}
             </span>
             <span className="text-xs text-[#8c8c8c]">
               {message.timestamp.toLocaleTimeString([], {
@@ -291,17 +329,20 @@ function Ui6ChatMessage({ message }: { message: Ui6Message }) {
   );
 }
 
-function Ui6TypingIndicator() {
+function Ui6TypingIndicator({ assistantLabel }: { assistantLabel: string }) {
+  const assistantBadge = assistantInitial(assistantLabel);
   return (
     <div className="bg-[#111111] px-6 py-6">
       <div className="flex max-w-none gap-4">
         <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-orange-600 text-white">
-          C
+          {assistantBadge}
         </div>
 
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex items-center gap-2">
-            <span className="text-sm font-medium text-[#e5e5e5]">Claude</span>
+            <span className="text-sm font-medium text-[#e5e5e5]">
+              {assistantLabel}
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex space-x-1">
@@ -711,23 +752,18 @@ export function Ui6ChatbotPage() {
     () => chats.find((chat) => chat.id === currentChatId) ?? null,
     [chats, currentChatId]
   );
-  const executorOptions = useMemo(
-    () => Object.keys(profiles ?? {}) as BaseCodingAgent[],
-    [profiles]
-  );
-  const fallbackExecutor = useMemo(
-    () =>
-      executorOptions.includes(DROID_EXECUTOR)
-        ? DROID_EXECUTOR
-        : (executorOptions[0] ?? null),
-    [executorOptions]
-  );
+  const executorOptions = useMemo(() => [DROID_EXECUTOR], []);
+  const fallbackExecutor = DROID_EXECUTOR;
   const fallbackVariant = useMemo(
     () => getVariantOptions(fallbackExecutor, profiles)[0] ?? null,
     [fallbackExecutor, profiles]
   );
   const composerExecutor = currentChat?.selectedExecutor ?? draftExecutor;
   const effectiveComposerExecutor = composerExecutor ?? fallbackExecutor;
+  const assistantLabel = useMemo(
+    () => executorDisplayName(effectiveComposerExecutor),
+    [effectiveComposerExecutor]
+  );
   const variantOptions = useMemo(
     () => getVariantOptions(effectiveComposerExecutor, profiles),
     [effectiveComposerExecutor, profiles]
@@ -740,10 +776,10 @@ export function Ui6ChatbotPage() {
     return variantOptions[0] ?? null;
   }, [composerVariant, variantOptions]);
   useEffect(() => {
-    if (!draftExecutor) {
-      setDraftExecutor(fallbackExecutor);
+    if (draftExecutor !== DROID_EXECUTOR) {
+      setDraftExecutor(DROID_EXECUTOR);
     }
-  }, [draftExecutor, fallbackExecutor]);
+  }, [draftExecutor]);
 
   useEffect(() => {
     if (draftVariant === null) {
@@ -864,19 +900,10 @@ export function Ui6ChatbotPage() {
     initialMessages: Ui6Message[] = []
   ) => {
     const now = new Date();
-    const defaultExecutor = fallbackExecutor;
-    const defaultVariant = getVariantOptions(defaultExecutor, profiles)[0] ?? null;
+    const defaultVariant = getVariantOptions(DROID_EXECUTOR, profiles)[0] ?? null;
     const savedPrefs = readThreadPrefs()[thread.id];
-    const savedExecutor = savedPrefs?.executor;
-    const hasSavedExecutor =
-      savedExecutor !== null && executorOptions.includes(savedExecutor);
-    const savedVariants = getVariantOptions(savedExecutor, profiles);
-    const persistedExecutor =
-      hasSavedExecutor ? savedExecutor : null;
-    const persistedVariant =
-      persistedExecutor && savedPrefs?.variant && savedVariants.includes(savedPrefs.variant)
-        ? savedPrefs.variant
-        : null;
+    const persistedExecutor = DROID_EXECUTOR;
+    const persistedVariant = savedPrefs?.variant ?? null;
 
     let chatToUse: Ui6Chat;
     setChats((prev) => {
@@ -886,8 +913,8 @@ export function Ui6ChatbotPage() {
           ...existing,
           title: thread.title,
           executionMode: thread.execution_mode,
-          selectedExecutor: existing.selectedExecutor ?? persistedExecutor,
-          selectedVariant: existing.selectedVariant ?? persistedVariant,
+          selectedExecutor: DROID_EXECUTOR,
+          selectedVariant: existing.selectedVariant ?? persistedVariant ?? defaultVariant,
           updatedAt: new Date(thread.updated_at),
         };
         chatToUse = updatedExisting;
@@ -900,7 +927,7 @@ export function Ui6ChatbotPage() {
         title: thread.title,
         executionMode: thread.execution_mode,
         messages: initialMessages,
-        selectedExecutor: persistedExecutor ?? defaultExecutor,
+        selectedExecutor: persistedExecutor,
         selectedVariant: persistedVariant ?? defaultVariant,
         createdAt: now,
         updatedAt: now,
@@ -1223,7 +1250,7 @@ export function Ui6ChatbotPage() {
         const newChat = upsertChatFromThread(activeProjectId, thread, [userMessage]);
         loadedThreadMessagesRef.current.add(newChat.id);
         const selectedExecutor =
-          draftExecutor ?? newChat.selectedExecutor ?? fallbackExecutor;
+          DROID_EXECUTOR;
         const selectedVariant =
           draftVariant ?? newChat.selectedVariant ?? fallbackVariant;
         writeThreadPrefs(newChat.id, {
@@ -1275,19 +1302,21 @@ export function Ui6ChatbotPage() {
   };
 
   const handleExecutorChange = (executor: BaseCodingAgent) => {
-    const nextVariant = getVariantOptions(executor, profiles)[0] ?? null;
+    void executor;
+    const forcedExecutor = DROID_EXECUTOR;
+    const nextVariant = getVariantOptions(forcedExecutor, profiles)[0] ?? null;
     if (!currentChat) {
-      setDraftExecutor(executor);
+      setDraftExecutor(forcedExecutor);
       setDraftVariant(nextVariant);
       return;
     }
-    writeThreadPrefs(currentChat.id, { executor, variant: nextVariant });
+    writeThreadPrefs(currentChat.id, { executor: forcedExecutor, variant: nextVariant });
     setChats((prev) =>
       prev.map((chat) =>
         chat.id === currentChat.id
           ? {
               ...chat,
-              selectedExecutor: executor,
+              selectedExecutor: forcedExecutor,
               selectedVariant: nextVariant,
             }
           : chat
@@ -1301,7 +1330,7 @@ export function Ui6ChatbotPage() {
       return;
     }
     writeThreadPrefs(currentChat.id, {
-      executor: currentChat.selectedExecutor,
+      executor: DROID_EXECUTOR,
       variant,
     });
     setChats((prev) =>
@@ -1664,21 +1693,6 @@ export function Ui6ChatbotPage() {
                   {currentChat.title}
                 </h1>
               )}
-              <p className="truncate text-xs text-[#777777]">
-                {`${effectiveComposerExecutor ?? 'No Executor'}${
-                  effectiveComposerVariant ? ` · ${effectiveComposerVariant}` : ''
-                }${
-                  currentChat
-                    ? ` · ${
-                        currentChat.executionMode === 'in_place'
-                          ? 'In-place'
-                          : 'Isolated'
-                      }`
-                    : activeProjectId
-                      ? ' · ready'
-                      : ' · select project'
-                }`}
-              </p>
             </div>
 
             <button
@@ -1697,9 +1711,13 @@ export function Ui6ChatbotPage() {
               <div ref={messageScrollRef} className="min-h-0 flex-1 overflow-y-auto">
                 <div className="mx-auto max-w-4xl px-6 py-8">
                   {currentChat.messages.map((message) => (
-                    <Ui6ChatMessage key={message.id} message={message} />
+                    <Ui6ChatMessage
+                      key={message.id}
+                      message={message}
+                      assistantLabel={assistantLabel}
+                    />
                   ))}
-                  {isTyping && <Ui6TypingIndicator />}
+                  {isTyping && <Ui6TypingIndicator assistantLabel={assistantLabel} />}
                 </div>
               </div>
 
