@@ -50,6 +50,8 @@ import { WorkspacesLanding } from '@/pages/ui-new/WorkspacesLanding';
 import { ElectricTestPage } from '@/pages/ui-new/ElectricTestPage';
 import { ProjectKanban } from '@/pages/ui-new/ProjectKanban';
 import { MigratePage } from '@/pages/ui-new/MigratePage';
+import { NewUiShowcaseLayout } from '@/pages/ui-showcase/NewUiShowcaseLayout';
+import { Ui6ChatbotPage } from '@/pages/ui-showcase/Ui6ChatbotPage';
 
 const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes);
 
@@ -189,6 +191,11 @@ function AppContent() {
                 path="/local-projects/:projectId/tasks/:taskId/attempts/:attemptId"
                 element={<ProjectTasks />}
               />
+            </Route>
+
+            {/* ========== UI SHOWCASE ROUTES ========== */}
+            <Route element={<NewUiShowcaseLayout />}>
+              <Route path="/new-ui" element={<Ui6ChatbotPage />} />
             </Route>
 
             {/* ========== NEW DESIGN ROUTES ========== */}

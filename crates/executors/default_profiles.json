@@ -323,6 +323,12 @@
           "autonomy": "skip-permissions-unsafe",
           "model": "glm-4.6"
         }
+      },
+      "GLM_4_7_0_CUSTOM": {
+        "DROID": {
+          "autonomy": "skip-permissions-unsafe",
+          "model": "custom:GLM-4.7-0"
+        }
       }
     }
   }
