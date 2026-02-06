@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { BaseCodingAgent, type PatchType } from 'shared/types';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { attemptsApi, sessionsApi } from '@/lib/api';
+import { attemptsApi, projectsApi, sessionsApi } from '@/lib/api';
 import { streamJsonPatchEntries } from '@/utils/streamJsonPatchEntries';
 
 interface Ui6Message {
@@ -498,9 +498,13 @@ export function Ui6ChatbotPage() {
     useState(false);
   const [createProjectName, setCreateProjectName] = useState('');
   const [createProjectRepoPath, setCreateProjectRepoPath] = useState('');
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [repoPickerMessage, setRepoPickerMessage] = useState<string | null>(
     null
   );
+  const [createProjectMessage, setCreateProjectMessage] = useState<
+    string | null
+  >(null);
 
   const messageScrollRef = useRef<HTMLDivElement | null>(null);
   const activeStreamRef = useRef<ReturnType<
@@ -758,6 +762,7 @@ export function Ui6ChatbotPage() {
   };
 
   const openCreateProjectModal = () => {
+    setCreateProjectMessage(null);
     setRepoPickerMessage(null);
     setIsCreateProjectModalOpen(true);
   };
@@ -784,6 +789,53 @@ export function Ui6ChatbotPage() {
       setRepoPickerMessage(null);
     } catch {
       // User cancelled folder picker.
+    }
+  };
+
+  const handleCreateProject = async () => {
+    const projectName = createProjectName.trim();
+    const repoPath = createProjectRepoPath.trim();
+
+    if (!projectName) {
+      setCreateProjectMessage('Project name is required.');
+      return;
+    }
+
+    if (!repoPath) {
+      setCreateProjectMessage('Repo path is required.');
+      return;
+    }
+
+    const repoNameFromPath =
+      repoPath.split(/[\\/]/).filter(Boolean).pop() ?? projectName;
+
+    setIsCreatingProject(true);
+    setCreateProjectMessage(null);
+
+    try {
+      const project = await projectsApi.create({
+        name: projectName,
+        repositories: [
+          {
+            display_name: repoNameFromPath,
+            git_repo_path: repoPath,
+          },
+        ],
+      });
+
+      console.info('[new-ui] Project created', project);
+
+      setCreateProjectName('');
+      setCreateProjectRepoPath('');
+      setCreateProjectMessage(null);
+      setRepoPickerMessage(null);
+      setIsCreateProjectModalOpen(false);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to create project.';
+      setCreateProjectMessage(message);
+    } finally {
+      setIsCreatingProject(false);
     }
   };
 
@@ -1032,9 +1084,6 @@ export function Ui6ChatbotPage() {
                   <h2 className="text-base font-medium text-[#ececec]">
                     Create Project
                   </h2>
-                  <p className="mt-1 text-xs text-[#8a8a8a]">
-                    UI preview of the create-project request body.
-                  </p>
                 </div>
 
                 <button
@@ -1087,6 +1136,10 @@ export function Ui6ChatbotPage() {
                     <p className="text-xs text-[#9a9a9a]">{repoPickerMessage}</p>
                   )}
                 </div>
+
+                {createProjectMessage && (
+                  <p className="text-sm text-[#ff8f8f]">{createProjectMessage}</p>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-2 border-t border-[#242424] px-5 py-4">
@@ -1099,10 +1152,11 @@ export function Ui6ChatbotPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={closeCreateProjectModal}
-                  className="inline-flex h-9 items-center rounded-md bg-[#ececec] px-3 text-sm font-medium text-[#121212] transition-colors hover:bg-white"
+                  onClick={() => void handleCreateProject()}
+                  disabled={isCreatingProject}
+                  className="inline-flex h-9 items-center rounded-md bg-[#ececec] px-3 text-sm font-medium text-[#121212] transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  Create project (UI only)
+                  {isCreatingProject ? 'Creating...' : 'Create project'}
                 </button>
               </div>
             </div>
