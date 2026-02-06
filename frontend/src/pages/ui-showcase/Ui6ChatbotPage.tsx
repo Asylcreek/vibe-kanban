@@ -23,7 +23,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { BaseCodingAgent, type PatchType } from 'shared/types';
+import { BaseCodingAgent, type PatchType, type Project } from 'shared/types';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { attemptsApi, projectsApi, sessionsApi } from '@/lib/api';
 import { streamJsonPatchEntries } from '@/utils/streamJsonPatchEntries';
@@ -446,40 +446,9 @@ function Ui6RightSidebar({
   );
 }
 
-interface ThreadNode {
+interface ProjectThread {
+  id: string;
   title: string;
-  isExpanded?: boolean;
-  children?: Array<{ title: string; time: string }>;
-}
-
-function Ui6ThreadItem({
-  title,
-  isExpanded = false,
-  onSelect,
-}: {
-  title: string;
-  isExpanded?: boolean;
-  onSelect: () => void;
-}) {
-  const [expanded, setExpanded] = useState(isExpanded);
-
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        setExpanded((prev) => !prev);
-        onSelect();
-      }}
-      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-[#e5e5e5] transition-colors hover:bg-[#2a2a2a]"
-    >
-      {expanded ? (
-        <ChevronDown className="h-3 w-3 flex-shrink-0" />
-      ) : (
-        <ChevronRight className="h-3 w-3 flex-shrink-0" />
-      )}
-      <span className="truncate">{title}</span>
-    </button>
-  );
 }
 
 export function Ui6ChatbotPage() {
@@ -505,6 +474,12 @@ export function Ui6ChatbotPage() {
   const [createProjectMessage, setCreateProjectMessage] = useState<
     string | null
   >(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
+  const [expandedProjects, setExpandedProjects] = useState<
+    Record<string, boolean>
+  >({});
 
   const messageScrollRef = useRef<HTMLDivElement | null>(null);
   const activeStreamRef = useRef<ReturnType<
@@ -514,6 +489,13 @@ export function Ui6ChatbotPage() {
   const currentChat = useMemo(
     () => chats.find((chat) => chat.id === currentChatId) ?? null,
     [chats, currentChatId]
+  );
+  const projectThreadsById = useMemo<Record<string, ProjectThread[]>>(
+    () =>
+      Object.fromEntries(
+        projects.map((project) => [project.id, [] as ProjectThread[]])
+      ),
+    [projects]
   );
 
   useEffect(() => {
@@ -552,6 +534,10 @@ export function Ui6ChatbotPage() {
       setIsLeftSidebarOpen(true);
     }
   }, [isMobile]);
+
+  useEffect(() => {
+    void loadProjects();
+  }, []);
 
   useEffect(() => {
     if (!messageScrollRef.current) return;
@@ -607,6 +593,31 @@ export function Ui6ChatbotPage() {
         };
       })
     );
+  };
+
+  const loadProjects = async () => {
+    setIsLoadingProjects(true);
+    setProjectsError(null);
+
+    try {
+      const loadedProjects = await projectsApi.list();
+      setProjects(loadedProjects);
+      setExpandedProjects((prev) => {
+        const next = { ...prev };
+        loadedProjects.forEach((project) => {
+          if (next[project.id] === undefined) {
+            next[project.id] = true;
+          }
+        });
+        return next;
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to load projects.';
+      setProjectsError(message);
+    } finally {
+      setIsLoadingProjects(false);
+    }
   };
 
   const resolveWorkspaceId = async (): Promise<string | null> => {
@@ -771,6 +782,13 @@ export function Ui6ChatbotPage() {
     setIsCreateProjectModalOpen(false);
   };
 
+  const toggleProjectExpanded = (projectId: string) => {
+    setExpandedProjects((prev) => ({
+      ...prev,
+      [projectId]: !(prev[projectId] ?? true),
+    }));
+  };
+
   const selectRepoFolder = async () => {
     const windowWithDirectoryPicker = window as Window & {
       showDirectoryPicker?: () => Promise<{ name: string; path?: string }>;
@@ -825,6 +843,7 @@ export function Ui6ChatbotPage() {
 
       console.info('[new-ui] Project created', project);
 
+      await loadProjects();
       setCreateProjectName('');
       setCreateProjectRepoPath('');
       setCreateProjectMessage(null);
@@ -838,36 +857,6 @@ export function Ui6ChatbotPage() {
       setIsCreatingProject(false);
     }
   };
-
-  const threads: ThreadNode[] = [
-    {
-      title: '10p-customer',
-      isExpanded: true,
-      children: [
-        { title: 'Implement this design from Figm...', time: '22h' },
-        { title: 'Implement Figma withdraw modal', time: '22h' },
-        { title: 'Implement this design from Figm...', time: '1d' },
-        { title: 'Implement Figma deposit modal', time: '1d' },
-        { title: 'Implement Figma wallet page', time: '1d' },
-      ],
-    },
-    {
-      title: 'code-agent',
-      children: [
-        { title: 'Install frontend-design skill', time: '1d' },
-        { title: 'Add agent-browser skill', time: '1d' },
-        { title: 'Review project documentation', time: '1d' },
-      ],
-    },
-    {
-      title: 'code-agent - New project 2',
-      children: [
-        { title: 'how would one go about building...', time: '1d' },
-        { title: 'what the', time: '' },
-        { title: 'how would one build an app like t...', time: '' },
-      ],
-    },
-  ];
 
   return (
     <div className="new-design h-screen w-full">
@@ -950,41 +939,63 @@ export function Ui6ChatbotPage() {
 
             {isThreadsExpanded && (
               <div className="mt-1 space-y-0.5">
-                {threads.map((thread) => (
-                  <div key={thread.title}>
-                    <Ui6ThreadItem
-                      title={thread.title}
-                      isExpanded={thread.isExpanded}
-                      onSelect={() => {
-                        if (isMobile) setIsLeftSidebarOpen(false);
-                      }}
-                    />
+                {isLoadingProjects ? (
+                  <p className="px-2 py-1.5 text-xs text-[#777777]">
+                    Loading projects...
+                  </p>
+                ) : projectsError ? (
+                  <p className="px-2 py-1.5 text-xs text-[#ff8f8f]">
+                    {projectsError}
+                  </p>
+                ) : projects.length === 0 ? (
+                  <p className="px-2 py-1.5 text-xs text-[#777777]">No projects</p>
+                ) : (
+                  projects.map((project) => {
+                    const isExpanded = expandedProjects[project.id] ?? true;
+                    const projectThreads = projectThreadsById[project.id] ?? [];
 
-                    {thread.isExpanded && thread.children && (
-                      <div className="ml-4 mt-0.5 space-y-0.5">
-                        {thread.children.map((child) => (
-                          <button
-                            type="button"
-                            key={`${thread.title}-${child.title}`}
-                            onClick={() => {
-                              handleSendMessage(child.title);
-                              if (isMobile) setIsLeftSidebarOpen(false);
-                            }}
-                            className="group flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm text-[#a1a1a1] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
-                          >
-                            <span className="mr-2 flex-1 truncate">{child.title}</span>
-                            {child.time && (
-                              <span className="flex-shrink-0 text-xs text-[#666666] group-hover:text-[#999999]">
-                                {child.time}
-                              </span>
+                    return (
+                      <div key={project.id}>
+                        <button
+                          type="button"
+                          onClick={() => toggleProjectExpanded(project.id)}
+                          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-[#e5e5e5] transition-colors hover:bg-[#2a2a2a]"
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="h-3 w-3 flex-shrink-0" />
+                          ) : (
+                            <ChevronRight className="h-3 w-3 flex-shrink-0" />
+                          )}
+                          <span className="flex-1 truncate">{project.name}</span>
+                        </button>
+
+                        {isExpanded && (
+                          <div className="ml-4 mt-0.5 space-y-0.5">
+                            {projectThreads.length === 0 ? (
+                              <p className="rounded px-2 py-1.5 text-xs text-[#777777]">
+                                No threads
+                              </p>
+                            ) : (
+                              projectThreads.map((thread) => (
+                                <button
+                                  type="button"
+                                  key={thread.id}
+                                  onClick={() => {
+                                    handleSendMessage(thread.title);
+                                    if (isMobile) setIsLeftSidebarOpen(false);
+                                  }}
+                                  className="flex w-full items-center rounded px-2 py-1.5 text-left text-sm text-[#a1a1a1] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
+                                >
+                                  <span className="truncate">{thread.title}</span>
+                                </button>
+                              ))
                             )}
-                          </button>
-                        ))}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                ))}
-
+                    );
+                  })
+                )}
               </div>
             )}
           </div>
