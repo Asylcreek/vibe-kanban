@@ -145,10 +145,57 @@ function titleFromAssistantResponse(text: string): string | null {
     .replace(/\s+/g, ' ')
     .trim();
   if (!normalized) return null;
-  const firstSentence = normalized.split(/[.!?]/)[0]?.trim() ?? normalized;
-  const candidate = (firstSentence || normalized).trim();
-  if (!candidate) return null;
-  return candidate.length > 60 ? `${candidate.slice(0, 57).trim()}...` : candidate;
+
+  const skipStarts = [
+    'hello',
+    'hi',
+    'sure',
+    'great',
+    'i can',
+    'i will',
+    "i'm",
+    'let me',
+    'here',
+  ];
+
+  const sentences = normalized
+    .split(/[.!?]/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+
+  const meaningful =
+    sentences.find((sentence) => {
+      const lower = sentence.toLowerCase();
+      return !skipStarts.some((prefix) => lower.startsWith(prefix));
+    }) ?? sentences[0] ?? normalized;
+
+  const cleaned = meaningful
+    .replace(
+      /^(what would you like to|i can help with|here are|here's|i can help)\s+/i,
+      ''
+    )
+    .trim();
+
+  if (!cleaned) return null;
+
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  const concise = words.slice(0, 7).join(' ');
+  if (!concise) return null;
+  return concise.length > 42 ? `${concise.slice(0, 39).trim()}...` : concise;
+}
+
+function preferredDroidVariant(variants: string[]): string | null {
+  if (variants.length === 0) return null;
+  const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const preferredKeys = ['glm470custom', 'glm47custom', 'glmcustom'];
+
+  const preferred = variants.find((variant) => {
+    const normalized = normalize(variant);
+    if (preferredKeys.includes(normalized)) return true;
+    return normalized.includes('glm') && normalized.includes('custom');
+  });
+
+  return preferred ?? variants[0] ?? null;
 }
 
 function executorDisplayName(executor: BaseCodingAgent | null): string {
@@ -771,7 +818,7 @@ export function Ui6ChatbotPage() {
   const executorOptions = useMemo(() => [DROID_EXECUTOR], []);
   const fallbackExecutor = DROID_EXECUTOR;
   const fallbackVariant = useMemo(
-    () => getVariantOptions(fallbackExecutor, profiles)[0] ?? null,
+    () => preferredDroidVariant(getVariantOptions(fallbackExecutor, profiles)),
     [fallbackExecutor, profiles]
   );
   const composerExecutor = currentChat?.selectedExecutor ?? draftExecutor;
@@ -916,7 +963,9 @@ export function Ui6ChatbotPage() {
     initialMessages: Ui6Message[] = []
   ) => {
     const now = new Date();
-    const defaultVariant = getVariantOptions(DROID_EXECUTOR, profiles)[0] ?? null;
+    const defaultVariant = preferredDroidVariant(
+      getVariantOptions(DROID_EXECUTOR, profiles)
+    );
     const savedPrefs = readThreadPrefs()[thread.id];
     const persistedExecutor = DROID_EXECUTOR;
     const persistedVariant = savedPrefs?.variant ?? null;
@@ -1394,7 +1443,9 @@ export function Ui6ChatbotPage() {
   const handleExecutorChange = (executor: BaseCodingAgent) => {
     void executor;
     const forcedExecutor = DROID_EXECUTOR;
-    const nextVariant = getVariantOptions(forcedExecutor, profiles)[0] ?? null;
+    const nextVariant = preferredDroidVariant(
+      getVariantOptions(forcedExecutor, profiles)
+    );
     if (!currentChat) {
       setDraftExecutor(forcedExecutor);
       setDraftVariant(nextVariant);

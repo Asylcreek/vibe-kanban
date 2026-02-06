@@ -95,6 +95,42 @@ impl ChatThreadMessage {
         execution_process_id: Uuid,
         content: String,
     ) -> Result<Self, sqlx::Error> {
+        let updated = sqlx::query(
+            r#"UPDATE chat_thread_messages
+               SET content = $3,
+                   updated_at = datetime('now', 'subsec')
+               WHERE thread_id = $1
+                 AND role = 'assistant'
+                 AND execution_process_id = $2"#,
+        )
+        .bind(thread_id)
+        .bind(execution_process_id)
+        .bind(&content)
+        .execute(pool)
+        .await?;
+
+        if updated.rows_affected() > 0 {
+            return sqlx::query_as::<_, ChatThreadMessage>(
+                r#"SELECT id,
+                          thread_id,
+                          role,
+                          content,
+                          execution_process_id,
+                          created_at,
+                          updated_at
+                   FROM chat_thread_messages
+                   WHERE thread_id = $1
+                     AND role = 'assistant'
+                     AND execution_process_id = $2
+                   ORDER BY updated_at DESC
+                   LIMIT 1"#,
+            )
+            .bind(thread_id)
+            .bind(execution_process_id)
+            .fetch_one(pool)
+            .await;
+        }
+
         sqlx::query_as::<_, ChatThreadMessage>(
             r#"INSERT INTO chat_thread_messages (
                     id,
@@ -104,9 +140,6 @@ impl ChatThreadMessage {
                     execution_process_id
                )
                VALUES ($1, $2, 'assistant', $3, $4)
-               ON CONFLICT(thread_id, role, execution_process_id) DO UPDATE SET
-                    content = excluded.content,
-                    updated_at = datetime('now', 'subsec')
                RETURNING id,
                          thread_id,
                          role,
@@ -117,7 +150,7 @@ impl ChatThreadMessage {
         )
         .bind(Uuid::new_v4())
         .bind(thread_id)
-        .bind(content)
+        .bind(&content)
         .bind(execution_process_id)
         .fetch_one(pool)
         .await
