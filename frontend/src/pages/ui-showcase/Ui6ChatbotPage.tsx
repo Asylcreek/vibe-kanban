@@ -15,6 +15,7 @@ import {
   Mic,
   PanelRightOpen,
   PenTool,
+  Pencil,
   Plus,
   Search,
   Settings,
@@ -134,54 +135,6 @@ function writeDraftPrefs(prefs: ExecutorPrefs) {
 function assistantInitial(label: string): string {
   const trimmed = label.trim();
   return trimmed.length > 0 ? trimmed[0]!.toUpperCase() : 'A';
-}
-
-function titleFromAssistantResponse(text: string): string | null {
-  const normalized = text
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/[#>*_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (!normalized) return null;
-
-  const skipStarts = [
-    'hello',
-    'hi',
-    'sure',
-    'great',
-    'i can',
-    'i will',
-    "i'm",
-    'let me',
-    'here',
-  ];
-
-  const sentences = normalized
-    .split(/[.!?]/)
-    .map((sentence) => sentence.trim())
-    .filter(Boolean);
-
-  const meaningful =
-    sentences.find((sentence) => {
-      const lower = sentence.toLowerCase();
-      return !skipStarts.some((prefix) => lower.startsWith(prefix));
-    }) ?? sentences[0] ?? normalized;
-
-  const cleaned = meaningful
-    .replace(
-      /^(what would you like to|i can help with|here are|here's|i can help)\s+/i,
-      ''
-    )
-    .trim();
-
-  if (!cleaned) return null;
-
-  const words = cleaned.split(/\s+/).filter(Boolean);
-  const concise = words.slice(0, 7).join(' ');
-  if (!concise) return null;
-  return concise.length > 42 ? `${concise.slice(0, 39).trim()}...` : concise;
 }
 
 function preferredDroidVariant(variants: string[]): string | null {
@@ -785,6 +738,13 @@ export function Ui6ChatbotPage() {
   const [expandedProjects, setExpandedProjects] = useState<
     Record<string, boolean>
   >({});
+  const [renameTarget, setRenameTarget] = useState<{
+    threadId: string;
+    projectId: string;
+  } | null>(null);
+  const [titleDraft, setTitleDraft] = useState('');
+  const [isSavingTitle, setIsSavingTitle] = useState(false);
+  const [titleEditError, setTitleEditError] = useState<string | null>(null);
   const initialDraftPrefs = useMemo(() => readDraftPrefs(), []);
   const [draftExecutor, setDraftExecutor] = useState<BaseCodingAgent | null>(
     initialDraftPrefs.executor
@@ -1096,67 +1056,6 @@ export function Ui6ChatbotPage() {
     }
   }, []);
 
-  const maybeGenerateThreadTitle = useCallback(async (
-    threadId: string,
-    projectId: string,
-    assistantText: string
-  ) => {
-    const generatedTitle = titleFromAssistantResponse(assistantText);
-    if (!generatedTitle) return;
-
-    let shouldRename = false;
-    setChats((prev) =>
-      prev.map((chat) => {
-        if (chat.id !== threadId) return chat;
-        if (chat.title !== DEFAULT_THREAD_TITLE) return chat;
-        shouldRename = true;
-        return {
-          ...chat,
-          title: generatedTitle,
-          updatedAt: new Date(),
-        };
-      })
-    );
-
-    if (!shouldRename) {
-      return;
-    }
-
-    try {
-      const updated = await newUiApi.updateThread(threadId, {
-        title: generatedTitle,
-        execution_mode: null,
-      });
-
-      setChats((prev) =>
-        prev.map((chat) =>
-          chat.id === updated.id
-            ? {
-                ...chat,
-                title: updated.title,
-                updatedAt: new Date(updated.updated_at),
-              }
-            : chat
-        )
-      );
-
-      setProjectThreadsById((prev) => ({
-        ...prev,
-        [projectId]: (prev[projectId] ?? []).map((thread) =>
-          thread.id === updated.id
-            ? {
-                ...thread,
-                title: updated.title,
-                updated_at: new Date(updated.updated_at),
-              }
-            : thread
-        ),
-      }));
-    } catch {
-      // Non-blocking: keep optimistic title if update fails.
-    }
-  }, []);
-
   const finalizeAssistantMessageText = useCallback((
     process: ExecutionProcess,
     fallbackText: string
@@ -1175,8 +1074,7 @@ export function Ui6ChatbotPage() {
 
   const attachProcessStream = useCallback((
     threadId: string,
-    processId: string,
-    projectId: string
+    processId: string
   ) => {
     const assistantMessageId = `${processId}-assistant`;
     activeStreamRef.current?.close();
@@ -1207,18 +1105,12 @@ export function Ui6ChatbotPage() {
                 assistantText
               );
               setAssistantMessage(threadId, assistantMessageId, finalText);
-              return Promise.all([
-                persistAssistantMessage(threadId, processId, finalText),
-                maybeGenerateThreadTitle(threadId, projectId, finalText),
-              ]);
+              return persistAssistantMessage(threadId, processId, finalText);
             })
             .catch(() => {
               const fallback = assistantText || 'Completed.';
               setAssistantMessage(threadId, assistantMessageId, fallback);
-              return Promise.all([
-                persistAssistantMessage(threadId, processId, fallback),
-                maybeGenerateThreadTitle(threadId, projectId, fallback),
-              ]);
+              return persistAssistantMessage(threadId, processId, fallback);
             })
             .finally(() => {
               setIsTyping(false);
@@ -1238,7 +1130,6 @@ export function Ui6ChatbotPage() {
     );
   }, [
     finalizeAssistantMessageText,
-    maybeGenerateThreadTitle,
     persistAssistantMessage,
     setAssistantMessage,
   ]);
@@ -1266,7 +1157,7 @@ export function Ui6ChatbotPage() {
         ) {
           return;
         }
-        attachProcessStream(threadId, activeProcess.id, projectId);
+        attachProcessStream(threadId, activeProcess.id);
       } catch {
         // Non-fatal: thread remains usable without reconnect.
       }
@@ -1347,7 +1238,7 @@ export function Ui6ChatbotPage() {
         force_when_dirty: null,
         perform_git_reset: null,
       });
-      attachProcessStream(chat.id, process.id, chat.projectId);
+      attachProcessStream(chat.id, process.id);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unknown backend error';
@@ -1527,6 +1418,94 @@ export function Ui6ChatbotPage() {
     setActiveProjectId(projectId);
     upsertChatFromThread(projectId, thread, []);
     void loadThreadMessages(projectId, thread.id);
+  };
+
+  const openRenameModal = (target: {
+    threadId: string;
+    projectId: string;
+    title: string;
+  }) => {
+    setRenameTarget({ threadId: target.threadId, projectId: target.projectId });
+    setTitleEditError(null);
+    setTitleDraft(target.title);
+  };
+
+  const startTitleEdit = () => {
+    if (!currentChat) return;
+    openRenameModal({
+      threadId: currentChat.id,
+      projectId: currentChat.projectId,
+      title: currentChat.title,
+    });
+  };
+
+  const cancelTitleEdit = () => {
+    if (isSavingTitle) return;
+    setRenameTarget(null);
+    setTitleEditError(null);
+    setTitleDraft('');
+  };
+
+  const saveTitleEdit = async () => {
+    if (!renameTarget || isSavingTitle) return;
+    const nextTitle = titleDraft.trim();
+
+    if (!nextTitle) {
+      setTitleEditError('Title cannot be empty.');
+      return;
+    }
+
+    const currentThread = projectThreadsById[renameTarget.projectId]?.find(
+      (thread) => thread.id === renameTarget.threadId
+    );
+    if (currentThread && nextTitle === currentThread.title) {
+      cancelTitleEdit();
+      return;
+    }
+
+    setIsSavingTitle(true);
+    setTitleEditError(null);
+
+    try {
+      const updated = await newUiApi.updateThread(renameTarget.threadId, {
+        title: nextTitle,
+        execution_mode: null,
+      });
+
+      setChats((prev) =>
+        prev.map((chat) =>
+          chat.id === updated.id
+            ? {
+                ...chat,
+                title: updated.title,
+                updatedAt: new Date(updated.updated_at),
+              }
+            : chat
+        )
+      );
+
+      setProjectThreadsById((prev) => ({
+        ...prev,
+        [renameTarget.projectId]: (prev[renameTarget.projectId] ?? []).map((thread) =>
+          thread.id === updated.id
+            ? {
+                ...thread,
+                title: updated.title,
+                updated_at: new Date(updated.updated_at),
+              }
+            : thread
+        ),
+      }));
+
+      setRenameTarget(null);
+      setTitleDraft('');
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to rename thread';
+      setTitleEditError(message);
+    } finally {
+      setIsSavingTitle(false);
+    }
   };
 
   const handleThreadModeChange = async (
@@ -1794,17 +1773,38 @@ export function Ui6ChatbotPage() {
                               </p>
                             ) : (
                               projectThreads.map((thread) => (
-                                <button
-                                  type="button"
+                                <div
                                   key={thread.id}
-                                  onClick={() => {
-                                    handleOpenThread(project.id, thread);
-                                    if (isMobile) setIsLeftSidebarOpen(false);
-                                  }}
-                                  className="flex w-full items-center rounded px-2 py-1.5 text-left text-sm text-[#a1a1a1] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
+                                  className="group flex w-full items-center rounded transition-colors hover:bg-[#2a2a2a]"
                                 >
-                                  <span className="truncate">{thread.title}</span>
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleOpenThread(project.id, thread);
+                                      if (isMobile) setIsLeftSidebarOpen(false);
+                                    }}
+                                    className="flex min-w-0 flex-1 items-center rounded px-2 py-1.5 text-left text-sm text-[#a1a1a1] transition-colors hover:text-[#e5e5e5]"
+                                  >
+                                    <span className="truncate">{thread.title}</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      openRenameModal({
+                                        threadId: thread.id,
+                                        projectId: project.id,
+                                        title: thread.title,
+                                      });
+                                    }}
+                                    className="pointer-events-none mr-1 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-[#999999] opacity-0 transition-all hover:bg-[#343434] hover:text-[#f5f5f5] group-hover:pointer-events-auto group-hover:opacity-100 focus:pointer-events-auto focus:opacity-100 focus:outline-none"
+                                    aria-label={`Rename ${thread.title}`}
+                                    title="Rename thread"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
                               ))
                             )}
                           </div>
@@ -1850,9 +1850,20 @@ export function Ui6ChatbotPage() {
 
             <div className="min-w-0 flex-1">
               {currentChat && (
-                <h1 className="truncate text-sm font-medium text-[#e5e5e5]">
-                  {currentChat.title}
-                </h1>
+                <div className="flex min-w-0 items-center gap-1">
+                  <h1 className="truncate text-sm font-medium text-[#e5e5e5]">
+                    {currentChat.title}
+                  </h1>
+                  <button
+                    type="button"
+                    onClick={startTitleEdit}
+                    className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-[#999999] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
+                    aria-label="Edit thread title"
+                    title="Edit thread title"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               )}
             </div>
 
@@ -2029,6 +2040,80 @@ export function Ui6ChatbotPage() {
                   className="inline-flex h-9 items-center rounded-md bg-[#ececec] px-3 text-sm font-medium text-[#121212] transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {isCreatingProject ? 'Creating...' : 'Create project'}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {renameTarget && (
+          <>
+            <button
+              type="button"
+              className="fixed inset-0 z-50 bg-black/70"
+              onClick={cancelTitleEdit}
+              aria-label="Close rename thread dialog"
+            />
+
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Rename Thread"
+              className="fixed left-1/2 top-1/2 z-[60] w-[min(520px,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2e2e2e] bg-[#121212] shadow-[0_28px_80px_rgba(0,0,0,0.7)]"
+            >
+              <div className="flex items-center justify-between border-b border-[#242424] px-5 py-4">
+                <h2 className="text-base font-medium text-[#ececec]">Rename Thread</h2>
+                <button
+                  type="button"
+                  onClick={cancelTitleEdit}
+                  className="flex h-8 w-8 items-center justify-center rounded text-[#999999] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
+                  aria-label="Close rename thread dialog"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-2 px-5 py-4">
+                <label className="block text-sm font-medium text-[#d9d9d9]">
+                  Thread title
+                </label>
+                <input
+                  value={titleDraft}
+                  onChange={(event) => setTitleDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      void saveTitleEdit();
+                    } else if (event.key === 'Escape') {
+                      event.preventDefault();
+                      cancelTitleEdit();
+                    }
+                  }}
+                  autoFocus
+                  disabled={isSavingTitle}
+                  className="h-10 w-full rounded-md border border-[#303030] bg-[#1a1a1a] px-3 text-sm text-[#e5e5e5] outline-none transition-colors placeholder:text-[#666666] focus:border-[#4a4a4a]"
+                />
+                {titleEditError && (
+                  <p className="text-xs text-[#ff8f8f]">{titleEditError}</p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-[#242424] px-5 py-4">
+                <button
+                  type="button"
+                  onClick={cancelTitleEdit}
+                  disabled={isSavingTitle}
+                  className="inline-flex h-9 items-center rounded-md border border-[#343434] px-3 text-sm text-[#c9c9c9] transition-colors hover:bg-[#232323] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveTitleEdit()}
+                  disabled={isSavingTitle}
+                  className="inline-flex h-9 items-center rounded-md bg-[#ececec] px-3 text-sm font-medium text-[#121212] transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isSavingTitle ? 'Saving...' : 'Save'}
                 </button>
               </div>
             </div>
