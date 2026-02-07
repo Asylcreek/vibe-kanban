@@ -28,11 +28,13 @@ import {
   User,
   X,
   Zap,
+  RefreshCw,
 } from 'lucide-react';
 import {
   BaseCodingAgent,
   type ChatThreadMessage,
   type ChatThreadExecutionMode,
+  type Diff,
   type ExecutionProcess,
   type NormalizedEntry,
   type PatchType,
@@ -50,6 +52,7 @@ import {
 } from '@/lib/api';
 import { getVariantOptions } from '@/utils/executor';
 import { streamJsonPatchEntries } from '@/utils/streamJsonPatchEntries';
+import { useProjectDiffs } from '@/hooks/useProjectDiffs';
 
 interface Ui6Message {
   id: string;
@@ -640,16 +643,18 @@ function Ui6RightSidebar({
   width,
   isMobile,
   onResizeStart,
+  diffs,
+  onRefreshDiffs,
 }: {
   isOpen: boolean;
   onClose: () => void;
   width: number;
   isMobile: boolean;
   onResizeStart: (event: React.PointerEvent<HTMLDivElement>) => void;
+  diffs: Diff[];
+  onRefreshDiffs?: () => void;
 }) {
-  const [activeTab, setActiveTab] = useState<'artifacts' | 'files'>(
-    'artifacts'
-  );
+  const [activeTab, setActiveTab] = useState<'artifacts' | 'files' | 'changes'>('artifacts');
 
   if (!isOpen) return null;
 
@@ -709,6 +714,17 @@ function Ui6RightSidebar({
         <div className="flex h-12 items-center justify-start gap-2 border-b border-[#333333] px-4">
           <button
             type="button"
+            onClick={() => setActiveTab('changes')}
+            className={`rounded-none border-b-2 pb-1 text-sm ${
+              activeTab === 'changes'
+                ? 'border-[#e5e5e5] text-[#e5e5e5]'
+                : 'border-transparent text-[#999999]'
+            }`}
+          >
+            Changes
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab('artifacts')}
             className={`rounded-none border-b-2 pb-1 text-sm ${
               activeTab === 'artifacts'
@@ -732,7 +748,67 @@ function Ui6RightSidebar({
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
-          {activeTab === 'artifacts' ? (
+          {activeTab === 'changes' ? (
+            <div className="space-y-1">
+              {onRefreshDiffs && (
+                <div className="flex items-center justify-between px-2 py-2 border-b border-[#2a2a2a]">
+                  <span className="text-xs text-[#777777]">
+                    {diffs.length} {diffs.length === 1 ? 'file' : 'files'} changed
+                  </span>
+                  <button
+                    type="button"
+                    onClick={onRefreshDiffs}
+                    className="flex h-6 w-6 items-center justify-center rounded text-[#999999] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
+                    title="Refresh changes"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+              {diffs.length === 0 ? (
+                <div className="px-2 py-4 text-sm text-[#777777]">
+                  No changes
+                </div>
+              ) : (
+                diffs.map((diff, index) => {
+                  const filePath = diff.newPath || diff.oldPath || `unknown-${index}`;
+                  const fileName = filePath.split('/').pop() || filePath;
+                  const isCode = /\.(ts|tsx|js|jsx|rs|py|go|java|cpp|c|h|cs|php|rb|scala|kt|swift|md)$/.test(fileName);
+
+                  return (
+                    <div
+                      key={filePath}
+                      className="flex items-center gap-2 rounded p-2 text-left transition-colors hover:bg-[#1a1a1a]"
+                    >
+                      {isCode ? (
+                        <FileCode className="h-4 w-4 flex-shrink-0 text-[#999999]" />
+                      ) : (
+                        <File className="h-4 w-4 flex-shrink-0 text-[#999999]" />
+                      )}
+                      <span className="min-w-0 flex-1 truncate text-sm text-[#e5e5e5]">
+                        {fileName}
+                      </span>
+                      <span className="text-xs text-[#999999] shrink-0">
+                        {diff.change === 'added' && (
+                          <span className="text-green-600 dark:text-green-500">+{diff.additions ?? 0}</span>
+                        )}
+                        {diff.change === 'modified' && (
+                          <>
+                            <span className="text-green-600 dark:text-green-500">+{diff.additions ?? 0}</span>
+                            <span className="mx-1"> </span>
+                            <span className="text-red-600 dark:text-red-500">-{diff.deletions ?? 0}</span>
+                          </>
+                        )}
+                        {diff.change === 'deleted' && (
+                          <span className="text-red-600 dark:text-red-500">-{diff.deletions ?? 0}</span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          ) : activeTab === 'artifacts' ? (
             <div className="space-y-2">
               {artifacts.map((artifact) => {
                 const Icon = artifact.icon;
@@ -930,6 +1006,31 @@ export function Ui6ChatbotPage() {
       setIsLeftSidebarOpen(true);
     }
   }, [isMobile]);
+
+  // Get the active project's repo ID for diffs
+  const [activeProjectRepoId, setActiveProjectRepoId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadRepoId = async () => {
+      if (!activeProjectId) {
+        setActiveProjectRepoId(null);
+        return;
+      }
+      try {
+        const repos = await projectsApi.getRepositories(activeProjectId);
+        setActiveProjectRepoId(repos[0]?.id ?? null);
+      } catch {
+        setActiveProjectRepoId(null);
+      }
+    };
+    void loadRepoId();
+  }, [activeProjectId]);
+
+  const { diffs, refresh: refreshDiffs } = useProjectDiffs({
+    repoId: activeProjectRepoId,
+    enabled: isRightSidebarOpen,
+    pollInterval: 3000,
+  });
 
   useEffect(() => {
     const loadCurrentBranch = async () => {
@@ -2313,6 +2414,8 @@ export function Ui6ChatbotPage() {
           width={rightSidebarWidth}
           isMobile={isMobile}
           onResizeStart={(event) => startResize('right', event)}
+          diffs={diffs}
+          onRefreshDiffs={refreshDiffs}
         />
 
         {isCreateProjectModalOpen && (

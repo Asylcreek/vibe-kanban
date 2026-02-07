@@ -101,6 +101,7 @@ import {
   UpdateChatThread,
   SendThreadMessageRequest,
   UpsertAssistantThreadMessageRequest,
+  Diff,
 } from 'shared/types';
 import type { WorkspaceWithSession } from '@/types/attempt';
 import { createWorkspaceWithSession } from '@/types/attempt';
@@ -976,6 +977,11 @@ export const repoApi = {
       body: JSON.stringify({ ids }),
     });
     return handleApiResponse<Repo[]>(response);
+  },
+
+  getDiff: async (repoId: string): Promise<Diff[]> => {
+    const response = await makeRequest(`/api/repos/${repoId}/diff`);
+    return handleApiResponse<Diff[]>(response);
   },
 
   openEditor: async (

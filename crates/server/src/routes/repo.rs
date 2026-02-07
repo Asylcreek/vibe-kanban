@@ -10,13 +10,14 @@ use db::models::{
     repo::{Repo, UpdateRepo},
 };
 use deployment::Deployment;
-use git::{GitBranch, GitRemote};
+use git::{Commit, DiffTarget, GitBranch, GitRemote};
 use serde::{Deserialize, Serialize};
 use services::services::{
     file_search::SearchQuery,
     git_host::{GitHostError, GitHostProvider, GitHostService, OpenPrInfo, ProviderKind},
 };
 use ts_rs::TS;
+use utils::diff::Diff;
 use utils::response::ApiResponse;
 use uuid::Uuid;
 
@@ -286,6 +287,34 @@ pub async fn list_open_prs(
     }
 }
 
+pub async fn get_repo_diff(
+    State(deployment): State<DeploymentImpl>,
+    Path(repo_id): Path<Uuid>,
+) -> Result<ResponseJson<ApiResponse<Vec<Diff>>>, ApiError> {
+    let repo = deployment
+        .repo()
+        .get_by_id(&deployment.db().pool, repo_id)
+        .await?;
+
+    // Get current HEAD commit
+    let repo_obj = deployment.git().open_repo(&repo.path)?;
+    let head = repo_obj.head()?;
+    let head_commit = head.peel_to_commit()?;
+
+    // Compare working directory vs HEAD (not HEAD^) to show uncommitted changes
+    let base_commit = Commit::new(head_commit.id());
+
+    // Compute diffs
+    let diffs = deployment
+        .git()
+        .get_diffs(DiffTarget::Worktree {
+            worktree_path: &repo.path,
+            base_commit: &base_commit,
+        }, None)?;
+
+    Ok(ResponseJson(ApiResponse::success(diffs)))
+}
+
 pub fn router() -> Router<DeploymentImpl> {
     Router::new()
         .route("/repos", get(get_repos).post(register_repo))
@@ -294,6 +323,7 @@ pub fn router() -> Router<DeploymentImpl> {
         .route("/repos/{repo_id}", get(get_repo).put(update_repo))
         .route("/repos/{repo_id}/branches", get(get_repo_branches))
         .route("/repos/{repo_id}/remotes", get(get_repo_remotes))
+        .route("/repos/{repo_id}/diff", get(get_repo_diff))
         .route("/repos/{repo_id}/prs", get(list_open_prs))
         .route("/repos/{repo_id}/search", get(search_repo))
         .route("/repos/{repo_id}/open-editor", post(open_repo_in_editor))
