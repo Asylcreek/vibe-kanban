@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import toast from 'react-hot-toast';
 import {
   ArrowUp,
   ChevronDown,
@@ -21,6 +22,7 @@ import {
   Search,
   Settings,
   Sparkles,
+  Square,
   Target,
   Trash2,
   User,
@@ -40,7 +42,12 @@ import { useUserSystem } from '@/components/ConfigProvider';
 import DisplayConversationEntry from '@/components/NormalizedConversation/DisplayConversationEntry';
 import WYSIWYGEditor from '@/components/ui/wysiwyg';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { executionProcessesApi, newUiApi, projectsApi, repoApi } from '@/lib/api';
+import {
+  executionProcessesApi,
+  newUiApi,
+  projectsApi,
+  repoApi,
+} from '@/lib/api';
 import { getVariantOptions } from '@/utils/executor';
 import { streamJsonPatchEntries } from '@/utils/streamJsonPatchEntries';
 
@@ -172,7 +179,8 @@ function assistantInitial(label: string): string {
 
 function preferredDroidVariant(variants: string[]): string | null {
   if (variants.length === 0) return null;
-  const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const normalize = (value: string) =>
+    value.toLowerCase().replace(/[^a-z0-9]/g, '');
   const preferredKeys = ['glm470custom', 'glm47custom', 'glmcustom'];
 
   const preferred = variants.find((variant) => {
@@ -219,6 +227,8 @@ interface Ui6ChatInputProps {
   onExecutorChange: (executor: BaseCodingAgent) => void;
   onVariantChange: (variant: string | null) => void;
   disabled?: boolean;
+  canStop?: boolean;
+  onStop?: () => void;
 }
 
 function Ui6ChatInput({
@@ -230,10 +240,16 @@ function Ui6ChatInput({
   onExecutorChange,
   onVariantChange,
   disabled,
+  canStop,
+  onStop,
 }: Ui6ChatInputProps) {
   const [message, setMessage] = useState('');
 
   const handleSubmit = () => {
+    if (canStop) {
+      onStop?.();
+      return;
+    }
     if (!message.trim() || disabled) return;
     onSendMessage(message.trim());
     setMessage('');
@@ -315,11 +331,15 @@ function Ui6ChatInput({
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={!message.trim() || disabled}
+              disabled={canStop ? false : !message.trim() || disabled}
               className="flex h-8 w-8 items-center justify-center rounded-full bg-[#666666] p-0 transition-colors hover:bg-[#777777] disabled:opacity-30 disabled:hover:bg-[#666666]"
-              aria-label="Send message"
+              aria-label={canStop ? 'Stop' : 'Send message'}
             >
-              <ArrowUp className="h-4 w-4 text-black" />
+              {canStop ? (
+                <Square className="h-4 w-4 text-white" fill="white" />
+              ) : (
+                <ArrowUp className="h-4 w-4 text-black" />
+              )}
             </button>
           </div>
         </div>
@@ -347,9 +367,7 @@ function Ui6ChatMessage({
   return (
     <div
       className={`px-6 py-6 transition-colors ${
-        message.isUser
-          ? 'bg-[#0d0d0d]'
-          : 'bg-[#111111] hover:bg-[#171717]'
+        message.isUser ? 'bg-[#0d0d0d]' : 'bg-[#111111] hover:bg-[#171717]'
       }`}
     >
       <div className="flex max-w-none gap-4">
@@ -438,6 +456,8 @@ function Ui6Welcome({
   isUpdatingMode,
   modeError,
   currentBranch,
+  onStop,
+  canStop,
   disabled,
 }: {
   onSendMessage: (message: string) => void;
@@ -452,6 +472,8 @@ function Ui6Welcome({
   isUpdatingMode: boolean;
   modeError: string | null;
   currentBranch: string | null;
+  onStop: () => void;
+  canStop: boolean;
   disabled?: boolean;
 }) {
   const actions = [
@@ -491,7 +513,9 @@ function Ui6Welcome({
               <Sparkles className="h-5 w-5 text-white" />
             </div>
           </div>
-          <h1 className="mb-1 text-2xl text-[#e5e5e5]">What&apos;s new, Esmondrio?</h1>
+          <h1 className="mb-1 text-2xl text-[#e5e5e5]">
+            What&apos;s new, Esmondrio?
+          </h1>
           <p className="text-sm text-[#999999]">
             Start a conversation or try one of the suggestions below
           </p>
@@ -546,6 +570,8 @@ function Ui6Welcome({
             onExecutorChange={onExecutorChange}
             onVariantChange={onVariantChange}
             disabled={disabled}
+            canStop={canStop}
+            onStop={onStop}
           />
           <Ui6ExecutionBar
             currentMode={currentMode}
@@ -601,7 +627,9 @@ function Ui6ExecutionBar({
           <span>{currentBranch ?? 'unknown'}</span>
         </div>
       </div>
-      {modeError ? <p className="mt-1 text-xs text-[#ff8f8f]">{modeError}</p> : null}
+      {modeError ? (
+        <p className="mt-1 text-xs text-[#ff8f8f]">{modeError}</p>
+      ) : null}
     </>
   );
 }
@@ -619,7 +647,9 @@ function Ui6RightSidebar({
   isMobile: boolean;
   onResizeStart: (event: React.PointerEvent<HTMLDivElement>) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<'artifacts' | 'files'>('artifacts');
+  const [activeTab, setActiveTab] = useState<'artifacts' | 'files'>(
+    'artifacts'
+  );
 
   if (!isOpen) return null;
 
@@ -738,7 +768,9 @@ function Ui6RightSidebar({
                     className="flex w-full items-center gap-2 rounded p-2 text-left transition-colors hover:bg-[#1a1a1a]"
                   >
                     <Icon className="h-4 w-4 flex-shrink-0 text-[#999999]" />
-                    <span className="truncate text-sm text-[#e5e5e5]">{file.name}</span>
+                    <span className="truncate text-sm text-[#e5e5e5]">
+                      {file.name}
+                    </span>
                   </button>
                 );
               })}
@@ -772,9 +804,8 @@ export function Ui6ChatbotPage() {
   const [openProjectOptionsId, setOpenProjectOptionsId] = useState<
     string | null
   >(null);
-  const [deleteProjectTarget, setDeleteProjectTarget] = useState<Project | null>(
-    null
-  );
+  const [deleteProjectTarget, setDeleteProjectTarget] =
+    useState<Project | null>(null);
   const [isDeletingProject, setIsDeletingProject] = useState(false);
   const [deleteProjectError, setDeleteProjectError] = useState<string | null>(
     null
@@ -795,6 +826,7 @@ export function Ui6ChatbotPage() {
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [isUpdatingThreadMode, setIsUpdatingThreadMode] = useState(false);
   const [threadModeError, setThreadModeError] = useState<string | null>(null);
+  const [activeProcessId, setActiveProcessId] = useState<string | null>(null);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [projectsError, setProjectsError] = useState<string | null>(null);
   const [expandedProjects, setExpandedProjects] = useState<
@@ -866,6 +898,7 @@ export function Ui6ChatbotPage() {
     }
     return variantOptions[0] ?? null;
   }, [composerVariant, variantOptions]);
+  const canStopExecution = Boolean(activeProcessId);
   useEffect(() => {
     if (draftExecutor !== DROID_EXECUTOR) {
       setDraftExecutor(DROID_EXECUTOR);
@@ -1026,11 +1059,14 @@ export function Ui6ChatbotPage() {
           title: thread.title,
           executionMode: thread.execution_mode,
           selectedExecutor: DROID_EXECUTOR,
-          selectedVariant: existing.selectedVariant ?? persistedVariant ?? defaultVariant,
+          selectedVariant:
+            existing.selectedVariant ?? persistedVariant ?? defaultVariant,
           updatedAt: new Date(thread.updated_at),
         };
         chatToUse = updatedExisting;
-        return prev.map((chat) => (chat.id === thread.id ? updatedExisting : chat));
+        return prev.map((chat) =>
+          chat.id === thread.id ? updatedExisting : chat
+        );
       }
 
       const created: Ui6Chat = {
@@ -1052,49 +1088,52 @@ export function Ui6ChatbotPage() {
     return chatToUse!;
   };
 
-  const setAssistantMessage = useCallback((
-    chatId: string,
-    messageId: string,
-    text: string,
-    executionProcessId: string | null = null
-  ) => {
-    setChats((prev) =>
-      prev.map((chat) => {
-        if (chat.id !== chatId) return chat;
+  const setAssistantMessage = useCallback(
+    (
+      chatId: string,
+      messageId: string,
+      text: string,
+      executionProcessId: string | null = null
+    ) => {
+      setChats((prev) =>
+        prev.map((chat) => {
+          if (chat.id !== chatId) return chat;
 
-        const existingMessage = chat.messages.find(
-          (message) => message.id === messageId
-        );
-        const updatedMessages = existingMessage
-          ? chat.messages.map((message) =>
-              message.id === messageId
-                ? {
-                    ...message,
-                    text,
-                    executionProcessId:
-                      executionProcessId ?? message.executionProcessId,
-                  }
-                : message
-            )
-          : [
-              ...chat.messages,
-              {
-                id: messageId,
-                text,
-                isUser: false,
-                executionProcessId,
-                timestamp: new Date(),
-              },
-            ];
+          const existingMessage = chat.messages.find(
+            (message) => message.id === messageId
+          );
+          const updatedMessages = existingMessage
+            ? chat.messages.map((message) =>
+                message.id === messageId
+                  ? {
+                      ...message,
+                      text,
+                      executionProcessId:
+                        executionProcessId ?? message.executionProcessId,
+                    }
+                  : message
+              )
+            : [
+                ...chat.messages,
+                {
+                  id: messageId,
+                  text,
+                  isUser: false,
+                  executionProcessId,
+                  timestamp: new Date(),
+                },
+              ];
 
-        return {
-          ...chat,
-          updatedAt: new Date(),
-          messages: updatedMessages,
-        };
-      })
-    );
-  }, []);
+          return {
+            ...chat,
+            updatedAt: new Date(),
+            messages: updatedMessages,
+          };
+        })
+      );
+    },
+    []
+  );
 
   const setMessageNormalizedEntries = useCallback(
     (messageId: string, entries: PatchType[]) => {
@@ -1106,191 +1145,187 @@ export function Ui6ChatbotPage() {
     []
   );
 
-  const upsertThreadMessages = useCallback((
-    projectId: string,
-    threadId: string,
-    messages: Ui6Message[]
-  ) => {
-    setChats((prev) =>
-      prev.map((chat) =>
-        chat.id === threadId
-          ? {
-              ...chat,
-              projectId,
-              messages,
-              updatedAt:
-                messages.length > 0
-                  ? messages[messages.length - 1]!.timestamp
-                  : chat.updatedAt,
-            }
-          : chat
-      )
-    );
-  }, []);
+  const upsertThreadMessages = useCallback(
+    (projectId: string, threadId: string, messages: Ui6Message[]) => {
+      setChats((prev) =>
+        prev.map((chat) =>
+          chat.id === threadId
+            ? {
+                ...chat,
+                projectId,
+                messages,
+                updatedAt:
+                  messages.length > 0
+                    ? messages[messages.length - 1]!.timestamp
+                    : chat.updatedAt,
+              }
+            : chat
+        )
+      );
+    },
+    []
+  );
 
-  const loadThreadMessages = useCallback(async (
-    projectId: string,
-    threadId: string,
-    force = false
-  ) => {
-    if (!force && loadedThreadMessagesRef.current.has(threadId)) {
-      return;
-    }
-    const messages = await newUiApi.listThreadMessages(threadId);
-    const uiMessages = messages.map(toUiMessage);
-    upsertThreadMessages(
-      projectId,
-      threadId,
-      uiMessages
-    );
-    loadedThreadMessagesRef.current.add(threadId);
-
-    uiMessages
-      .filter(
-        (message) => !message.isUser && Boolean(message.executionProcessId)
-      )
-      .forEach((message) => {
-        const processId = message.executionProcessId!;
-        if (
-          hydratedProcessIdsRef.current.has(processId) ||
-          historicalStreamsRef.current.has(processId)
-        ) {
-          return;
-        }
-
-        const controller = streamJsonPatchEntries<PatchType>(
-          `/api/execution-processes/${processId}/normalized-logs/ws`,
-          {
-            onEntries: (entries) => {
-              setMessageNormalizedEntries(message.id, entries);
-            },
-            onFinished: (entries) => {
-              setMessageNormalizedEntries(message.id, entries);
-              hydratedProcessIdsRef.current.add(processId);
-              historicalStreamsRef.current.delete(processId);
-            },
-            onError: () => {
-              historicalStreamsRef.current.delete(processId);
-            },
-          }
-        );
-
-        historicalStreamsRef.current.set(processId, controller);
-      });
-  }, [setMessageNormalizedEntries, upsertThreadMessages]);
-
-  const persistAssistantMessage = useCallback(async (
-    threadId: string,
-    processId: string,
-    content: string
-  ) => {
-    const trimmed = content.trim();
-    if (!trimmed) return;
-    try {
-      await newUiApi.upsertAssistantThreadMessage(threadId, {
-        execution_process_id: processId,
-        content: trimmed,
-      });
-    } catch {
-      // Best effort to avoid blocking UI updates on persistence errors.
-    }
-  }, []);
-
-  const finalizeAssistantMessageText = useCallback((
-    process: ExecutionProcess,
-    fallbackText: string
-  ) => {
-    if (process.status === 'completed') {
-      return fallbackText || 'Completed.';
-    }
-    if (process.status === 'killed') {
-      return `Stopped.${process.exit_code !== null ? ` Exit code ${process.exit_code}.` : ''}`;
-    }
-    if (process.status === 'failed') {
-      return `Failed.${process.exit_code !== null ? ` Exit code ${process.exit_code}.` : ''}`;
-    }
-    return fallbackText || 'Completed.';
-  }, []);
-
-  const attachProcessStream = useCallback((
-    threadId: string,
-    processId: string
-  ) => {
-    const assistantMessageId = `${processId}-assistant`;
-    activeStreamRef.current?.close();
-    activeStreamRef.current = null;
-    activeStreamMetaRef.current = {
-      threadId,
-      processId,
-      assistantMessageId,
-    };
-    setIsTyping(true);
-
-    activeStreamRef.current = streamJsonPatchEntries<PatchType>(
-      `/api/execution-processes/${processId}/normalized-logs/ws`,
-      {
-        onEntries: (entries) => {
-          setMessageNormalizedEntries(assistantMessageId, entries);
-          const assistantText = extractAssistantText(entries);
-          if (assistantText) {
-            setAssistantMessage(
-              threadId,
-              assistantMessageId,
-              assistantText,
-              processId
-            );
-          }
-        },
-        onFinished: (entries) => {
-          setMessageNormalizedEntries(assistantMessageId, entries);
-          const assistantText = extractAssistantText(entries);
-          void executionProcessesApi
-            .getDetails(processId)
-            .then((process) => {
-              const finalText = finalizeAssistantMessageText(
-                process,
-                assistantText
-              );
-              setAssistantMessage(
-                threadId,
-                assistantMessageId,
-                finalText,
-                processId
-              );
-              return persistAssistantMessage(threadId, processId, finalText);
-            })
-            .catch(() => {
-              const fallback = assistantText || 'Completed.';
-              setAssistantMessage(
-                threadId,
-                assistantMessageId,
-                fallback,
-                processId
-              );
-              return persistAssistantMessage(threadId, processId, fallback);
-            })
-            .finally(() => {
-              setIsTyping(false);
-              activeStreamRef.current = null;
-              activeStreamMetaRef.current = null;
-            });
-        },
-        onError: () => {
-          const text = 'Stream failed.';
-          setAssistantMessage(threadId, assistantMessageId, text, processId);
-          void persistAssistantMessage(threadId, processId, text);
-          setIsTyping(false);
-          activeStreamRef.current = null;
-          activeStreamMetaRef.current = null;
-        },
+  const loadThreadMessages = useCallback(
+    async (projectId: string, threadId: string, force = false) => {
+      if (!force && loadedThreadMessagesRef.current.has(threadId)) {
+        return;
       }
-    );
-  }, [
-    finalizeAssistantMessageText,
-    persistAssistantMessage,
-    setMessageNormalizedEntries,
-    setAssistantMessage,
-  ]);
+      const messages = await newUiApi.listThreadMessages(threadId);
+      const uiMessages = messages.map(toUiMessage);
+      upsertThreadMessages(projectId, threadId, uiMessages);
+      loadedThreadMessagesRef.current.add(threadId);
+
+      uiMessages
+        .filter(
+          (message) => !message.isUser && Boolean(message.executionProcessId)
+        )
+        .forEach((message) => {
+          const processId = message.executionProcessId!;
+          if (
+            hydratedProcessIdsRef.current.has(processId) ||
+            historicalStreamsRef.current.has(processId)
+          ) {
+            return;
+          }
+
+          const controller = streamJsonPatchEntries<PatchType>(
+            `/api/execution-processes/${processId}/normalized-logs/ws`,
+            {
+              onEntries: (entries) => {
+                setMessageNormalizedEntries(message.id, entries);
+              },
+              onFinished: (entries) => {
+                setMessageNormalizedEntries(message.id, entries);
+                hydratedProcessIdsRef.current.add(processId);
+                historicalStreamsRef.current.delete(processId);
+              },
+              onError: () => {
+                historicalStreamsRef.current.delete(processId);
+              },
+            }
+          );
+
+          historicalStreamsRef.current.set(processId, controller);
+        });
+    },
+    [setMessageNormalizedEntries, upsertThreadMessages]
+  );
+
+  const persistAssistantMessage = useCallback(
+    async (threadId: string, processId: string, content: string) => {
+      const trimmed = content.trim();
+      if (!trimmed) return;
+      try {
+        await newUiApi.upsertAssistantThreadMessage(threadId, {
+          execution_process_id: processId,
+          content: trimmed,
+        });
+      } catch {
+        // Best effort to avoid blocking UI updates on persistence errors.
+      }
+    },
+    []
+  );
+
+  const finalizeAssistantMessageText = useCallback(
+    (process: ExecutionProcess, fallbackText: string) => {
+      if (process.status === 'completed') {
+        return fallbackText || 'Completed.';
+      }
+      if (process.status === 'killed') {
+        return `Stopped.${process.exit_code !== null ? ` Exit code ${process.exit_code}.` : ''}`;
+      }
+      if (process.status === 'failed') {
+        return `Failed.${process.exit_code !== null ? ` Exit code ${process.exit_code}.` : ''}`;
+      }
+      return fallbackText || 'Completed.';
+    },
+    []
+  );
+
+  const attachProcessStream = useCallback(
+    (threadId: string, processId: string) => {
+      const assistantMessageId = `${processId}-assistant`;
+      activeStreamRef.current?.close();
+      activeStreamRef.current = null;
+      activeStreamMetaRef.current = {
+        threadId,
+        processId,
+        assistantMessageId,
+      };
+      setIsTyping(true);
+
+      activeStreamRef.current = streamJsonPatchEntries<PatchType>(
+        `/api/execution-processes/${processId}/normalized-logs/ws`,
+        {
+          onEntries: (entries) => {
+            setMessageNormalizedEntries(assistantMessageId, entries);
+            const assistantText = extractAssistantText(entries);
+            if (assistantText) {
+              setAssistantMessage(
+                threadId,
+                assistantMessageId,
+                assistantText,
+                processId
+              );
+            }
+          },
+          onFinished: (entries) => {
+            setMessageNormalizedEntries(assistantMessageId, entries);
+            const assistantText = extractAssistantText(entries);
+            void executionProcessesApi
+              .getDetails(processId)
+              .then((process) => {
+                const finalText = finalizeAssistantMessageText(
+                  process,
+                  assistantText
+                );
+                setAssistantMessage(
+                  threadId,
+                  assistantMessageId,
+                  finalText,
+                  processId
+                );
+                return persistAssistantMessage(threadId, processId, finalText);
+              })
+              .catch(() => {
+                const fallback = assistantText || 'Completed.';
+                setAssistantMessage(
+                  threadId,
+                  assistantMessageId,
+                  fallback,
+                  processId
+                );
+                return persistAssistantMessage(threadId, processId, fallback);
+              })
+              .finally(() => {
+                setIsTyping(false);
+                activeStreamRef.current = null;
+                activeStreamMetaRef.current = null;
+                setActiveProcessId(null);
+              });
+          },
+          onError: () => {
+            const text = 'Stream failed.';
+            setAssistantMessage(threadId, assistantMessageId, text, processId);
+            void persistAssistantMessage(threadId, processId, text);
+            setIsTyping(false);
+            activeStreamRef.current = null;
+            activeStreamMetaRef.current = null;
+            setActiveProcessId(null);
+          },
+        }
+      );
+    },
+    [
+      finalizeAssistantMessageText,
+      persistAssistantMessage,
+      setActiveProcessId,
+      setMessageNormalizedEntries,
+      setAssistantMessage,
+    ]
+  );
 
   useEffect(() => {
     const threadId = currentChat?.id;
@@ -1305,6 +1340,7 @@ export function Ui6ChatbotPage() {
       try {
         const activeProcess = await newUiApi.getActiveThreadProcess(threadId);
         if (!activeProcess) {
+          setActiveProcessId(null);
           return;
         }
         const activeMeta = activeStreamMetaRef.current;
@@ -1313,14 +1349,21 @@ export function Ui6ChatbotPage() {
           activeMeta.threadId === threadId &&
           activeMeta.processId === activeProcess.id
         ) {
+          setActiveProcessId(activeProcess.id);
           return;
         }
+        setActiveProcessId(activeProcess.id);
         attachProcessStream(threadId, activeProcess.id);
       } catch {
         // Non-fatal: thread remains usable without reconnect.
       }
     })();
-  }, [attachProcessStream, currentChat?.id, currentChat?.projectId, loadThreadMessages]);
+  }, [
+    attachProcessStream,
+    currentChat?.id,
+    currentChat?.projectId,
+    loadThreadMessages,
+  ]);
 
   const loadProjects = useCallback(async () => {
     setIsLoadingProjects(true);
@@ -1329,8 +1372,9 @@ export function Ui6ChatbotPage() {
     try {
       const loadedProjects = await projectsApi.list();
       setProjects(loadedProjects);
-      setActiveProjectId((prev) =>
-        prev ?? (loadedProjects.length > 0 ? loadedProjects[0].id : null)
+      setActiveProjectId(
+        (prev) =>
+          prev ?? (loadedProjects.length > 0 ? loadedProjects[0].id : null)
       );
       setExpandedProjects((prev) => {
         const next = { ...prev };
@@ -1396,12 +1440,53 @@ export function Ui6ChatbotPage() {
         force_when_dirty: null,
         perform_git_reset: null,
       });
+      setActiveProcessId(process.id);
       attachProcessStream(chat.id, process.id);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unknown backend error';
-      setAssistantMessage(chat.id, `${Date.now()}-assistant`, `Error: ${message}`);
+      setAssistantMessage(
+        chat.id,
+        `${Date.now()}-assistant`,
+        `Error: ${message}`
+      );
       setIsTyping(false);
+    }
+  };
+
+  const handleStopExecution = async () => {
+    if (!currentChat) return;
+
+    // Immediately update UI to show stopped state
+    const processId = activeProcessId;
+    if (processId) {
+      setAssistantMessage(
+        currentChat.id,
+        `${processId}-assistant`,
+        'Stopped.',
+        processId
+      );
+    }
+    setIsTyping(false);
+    activeStreamRef.current?.close();
+    activeStreamRef.current = null;
+    activeStreamMetaRef.current = null;
+    setActiveProcessId(null);
+
+    try {
+      const activeProcess =
+        processId ??
+        (await newUiApi.getActiveThreadProcess(currentChat.id))?.id ??
+        null;
+      if (!activeProcess) {
+        toast.error('No running process to stop.');
+        return;
+      }
+      await executionProcessesApi.stopExecutionProcess(activeProcess);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to stop process.';
+      toast.error(message);
     }
   };
 
@@ -1436,10 +1521,11 @@ export function Ui6ChatbotPage() {
           ...prev,
           [activeProjectId]: [thread, ...(prev[activeProjectId] ?? [])],
         }));
-        const newChat = upsertChatFromThread(activeProjectId, thread, [userMessage]);
+        const newChat = upsertChatFromThread(activeProjectId, thread, [
+          userMessage,
+        ]);
         loadedThreadMessagesRef.current.add(newChat.id);
-        const selectedExecutor =
-          DROID_EXECUTOR;
+        const selectedExecutor = DROID_EXECUTOR;
         const selectedVariant =
           draftVariant ?? newChat.selectedVariant ?? fallbackVariant;
         writeThreadPrefs(newChat.id, {
@@ -1459,7 +1545,12 @@ export function Ui6ChatbotPage() {
           )
         );
 
-        await sendToBackend(newChat, trimmed, selectedExecutor, selectedVariant);
+        await sendToBackend(
+          newChat,
+          trimmed,
+          selectedExecutor,
+          selectedVariant
+        );
       })();
       return;
     }
@@ -1502,7 +1593,10 @@ export function Ui6ChatbotPage() {
       setDraftVariant(nextVariant);
       return;
     }
-    writeThreadPrefs(currentChat.id, { executor: forcedExecutor, variant: nextVariant });
+    writeThreadPrefs(currentChat.id, {
+      executor: forcedExecutor,
+      variant: nextVariant,
+    });
     setChats((prev) =>
       prev.map((chat) =>
         chat.id === currentChat.id
@@ -1707,14 +1801,15 @@ export function Ui6ChatbotPage() {
 
       setProjectThreadsById((prev) => ({
         ...prev,
-        [renameTarget.projectId]: (prev[renameTarget.projectId] ?? []).map((thread) =>
-          thread.id === updated.id
-            ? {
-                ...thread,
-                title: updated.title,
-                updated_at: new Date(updated.updated_at),
-              }
-            : thread
+        [renameTarget.projectId]: (prev[renameTarget.projectId] ?? []).map(
+          (thread) =>
+            thread.id === updated.id
+              ? {
+                  ...thread,
+                  title: updated.title,
+                  updated_at: new Date(updated.updated_at),
+                }
+              : thread
         ),
       }));
 
@@ -1729,9 +1824,7 @@ export function Ui6ChatbotPage() {
     }
   };
 
-  const handleThreadModeChange = async (
-    nextMode: ChatThreadExecutionMode
-  ) => {
+  const handleThreadModeChange = async (nextMode: ChatThreadExecutionMode) => {
     if (!currentChat || currentChat.executionMode === nextMode) return;
 
     setIsUpdatingThreadMode(true);
@@ -1757,15 +1850,16 @@ export function Ui6ChatbotPage() {
 
       setProjectThreadsById((prev) => ({
         ...prev,
-        [currentChat.projectId]: (prev[currentChat.projectId] ?? []).map((thread) =>
-          thread.id === updated.id
-            ? {
-                ...thread,
-                title: updated.title,
-                execution_mode: updated.execution_mode,
-                updated_at: new Date(updated.updated_at),
-              }
-            : thread
+        [currentChat.projectId]: (prev[currentChat.projectId] ?? []).map(
+          (thread) =>
+            thread.id === updated.id
+              ? {
+                  ...thread,
+                  title: updated.title,
+                  execution_mode: updated.execution_mode,
+                  updated_at: new Date(updated.updated_at),
+                }
+              : thread
         ),
       }));
     } catch (error) {
@@ -1903,9 +1997,9 @@ export function Ui6ChatbotPage() {
 
           <div className="h-[calc(100%-132px)] overflow-y-auto px-3 py-2">
             <div className="flex items-center gap-1 px-1 py-1">
-	              <button
-	                type="button"
-	                onClick={() => setIsThreadsExpanded((prev) => !prev)}
+              <button
+                type="button"
+                onClick={() => setIsThreadsExpanded((prev) => !prev)}
                 className="flex min-w-0 flex-1 items-center gap-2 rounded px-1.5 py-1 text-xs font-medium text-[#999999] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
               >
                 {isThreadsExpanded ? (
@@ -1913,11 +2007,11 @@ export function Ui6ChatbotPage() {
                 ) : (
                   <ChevronRight className="h-3 w-3 flex-shrink-0" />
                 )}
-	                <span className="truncate">Threads</span>
-	              </button>
+                <span className="truncate">Threads</span>
+              </button>
 
-	              <button
-	                type="button"
+              <button
+                type="button"
                 onClick={openCreateProjectModal}
                 className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-[#999999] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
                 aria-label="Open create project form"
@@ -1938,7 +2032,9 @@ export function Ui6ChatbotPage() {
                     {projectsError}
                   </p>
                 ) : projects.length === 0 ? (
-                  <p className="px-2 py-1.5 text-xs text-[#777777]">No projects</p>
+                  <p className="px-2 py-1.5 text-xs text-[#777777]">
+                    No projects
+                  </p>
                 ) : (
                   projects.map((project) => {
                     const isExpanded = expandedProjects[project.id] ?? true;
@@ -1968,48 +2064,50 @@ export function Ui6ChatbotPage() {
                             ) : (
                               <ChevronRight className="h-3 w-3 flex-shrink-0" />
                             )}
-                            <span className="flex-1 truncate">{project.name}</span>
+                            <span className="flex-1 truncate">
+                              {project.name}
+                            </span>
                           </button>
 
-	                          <button
-	                            type="button"
-	                            onClick={(event) => {
-	                              event.stopPropagation();
-	                              setOpenProjectOptionsId((prev) =>
-	                                prev === project.id ? null : project.id
-	                              );
-	                            }}
-	                            className="pointer-events-none mr-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-[#a1a1a1] opacity-0 transition-all hover:bg-[#343434] hover:text-[#f5f5f5] group-hover:pointer-events-auto group-hover:opacity-100 focus:pointer-events-auto focus:opacity-100 focus:outline-none"
-	                            aria-label={`Options for ${project.name}`}
-	                            title={`Options for ${project.name}`}
-	                            data-project-options-root="true"
-	                          >
-	                            <MoreHorizontal className="h-3.5 w-3.5" />
-	                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setOpenProjectOptionsId((prev) =>
+                                prev === project.id ? null : project.id
+                              );
+                            }}
+                            className="pointer-events-none mr-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-[#a1a1a1] opacity-0 transition-all hover:bg-[#343434] hover:text-[#f5f5f5] group-hover:pointer-events-auto group-hover:opacity-100 focus:pointer-events-auto focus:opacity-100 focus:outline-none"
+                            aria-label={`Options for ${project.name}`}
+                            title={`Options for ${project.name}`}
+                            data-project-options-root="true"
+                          >
+                            <MoreHorizontal className="h-3.5 w-3.5" />
+                          </button>
 
-	                          {openProjectOptionsId === project.id && (
-	                            <div
-	                              className="absolute right-8 top-8 z-30 min-w-[180px] rounded-md border border-[#2f2f2f] bg-[#141414] p-1 shadow-[0_12px_30px_rgba(0,0,0,0.45)]"
-	                              data-project-options-root="true"
-	                            >
-	                              <button
-	                                type="button"
-	                                onClick={(event) => {
-	                                  event.stopPropagation();
-	                                  openDeleteProjectModal(project);
-	                                }}
-	                                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-[#ff9a9a] transition-colors hover:bg-[#2a1b1b] hover:text-[#ffd1d1]"
-	                              >
-	                                <Trash2 className="h-3.5 w-3.5" />
-	                                Delete project
-	                              </button>
-	                            </div>
-	                          )}
+                          {openProjectOptionsId === project.id && (
+                            <div
+                              className="absolute right-8 top-8 z-30 min-w-[180px] rounded-md border border-[#2f2f2f] bg-[#141414] p-1 shadow-[0_12px_30px_rgba(0,0,0,0.45)]"
+                              data-project-options-root="true"
+                            >
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openDeleteProjectModal(project);
+                                }}
+                                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-[#ff9a9a] transition-colors hover:bg-[#2a1b1b] hover:text-[#ffd1d1]"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Delete project
+                              </button>
+                            </div>
+                          )}
 
-	                          <button
-	                            type="button"
-	                            onClick={(event) => {
-	                              event.stopPropagation();
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
                               setActiveProjectId(project.id);
                               void handleCreateThread(project.id);
                             }}
@@ -2041,7 +2139,9 @@ export function Ui6ChatbotPage() {
                                     }}
                                     className="flex min-w-0 flex-1 items-center rounded px-2 py-1.5 text-left text-sm text-[#a1a1a1] transition-colors hover:text-[#e5e5e5]"
                                   >
-                                    <span className="truncate">{thread.title}</span>
+                                    <span className="truncate">
+                                      {thread.title}
+                                    </span>
                                   </button>
 
                                   <button
@@ -2136,17 +2236,24 @@ export function Ui6ChatbotPage() {
 
           {currentChat && currentChat.messages.length > 0 ? (
             <div className="flex h-full min-h-0 flex-col bg-[#0d0d0d]">
-              <div ref={messageScrollRef} className="min-h-0 flex-1 overflow-y-auto">
+              <div
+                ref={messageScrollRef}
+                className="min-h-0 flex-1 overflow-y-auto"
+              >
                 <div className="mx-auto max-w-4xl px-6 py-8">
                   {currentChat.messages.map((message) => (
                     <Ui6ChatMessage
                       key={message.id}
                       message={message}
                       assistantLabel={assistantLabel}
-                      normalizedEntries={normalizedEntriesByMessageId[message.id]}
+                      normalizedEntries={
+                        normalizedEntriesByMessageId[message.id]
+                      }
                     />
                   ))}
-                  {isTyping && <Ui6TypingIndicator assistantLabel={assistantLabel} />}
+                  {isTyping && (
+                    <Ui6TypingIndicator assistantLabel={assistantLabel} />
+                  )}
                 </div>
               </div>
 
@@ -2161,6 +2268,8 @@ export function Ui6ChatbotPage() {
                     onExecutorChange={handleExecutorChange}
                     onVariantChange={handleVariantChange}
                     disabled={isTyping}
+                    canStop={canStopExecution}
+                    onStop={handleStopExecution}
                   />
                   <Ui6ExecutionBar
                     currentMode={currentChat.executionMode}
@@ -2191,6 +2300,8 @@ export function Ui6ChatbotPage() {
               isUpdatingMode={isUpdatingThreadMode}
               modeError={threadModeError}
               currentBranch={currentBranch}
+              onStop={handleStopExecution}
+              canStop={canStopExecution}
               disabled={isTyping}
             />
           )}
@@ -2244,7 +2355,9 @@ export function Ui6ChatbotPage() {
                   <input
                     type="text"
                     value={createProjectName}
-                    onChange={(event) => setCreateProjectName(event.target.value)}
+                    onChange={(event) =>
+                      setCreateProjectName(event.target.value)
+                    }
                     placeholder="My project"
                     className="h-10 w-full rounded-md border border-[#303030] bg-[#1a1a1a] px-3 text-sm text-[#e5e5e5] outline-none transition-colors placeholder:text-[#666666] focus:border-[#4a4a4a]"
                   />
@@ -2273,12 +2386,16 @@ export function Ui6ChatbotPage() {
                     </button>
                   </div>
                   {repoPickerMessage && (
-                    <p className="text-xs text-[#9a9a9a]">{repoPickerMessage}</p>
+                    <p className="text-xs text-[#9a9a9a]">
+                      {repoPickerMessage}
+                    </p>
                   )}
                 </div>
 
                 {createProjectMessage && (
-                  <p className="text-sm text-[#ff8f8f]">{createProjectMessage}</p>
+                  <p className="text-sm text-[#ff8f8f]">
+                    {createProjectMessage}
+                  </p>
                 )}
               </div>
 
@@ -2319,7 +2436,9 @@ export function Ui6ChatbotPage() {
               className="fixed left-1/2 top-1/2 z-[60] w-[min(560px,94vw)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2e2e2e] bg-[#121212] shadow-[0_28px_80px_rgba(0,0,0,0.7)]"
             >
               <div className="flex items-center justify-between border-b border-[#242424] px-5 py-4">
-                <h2 className="text-base font-medium text-[#ececec]">Delete Project</h2>
+                <h2 className="text-base font-medium text-[#ececec]">
+                  Delete Project
+                </h2>
                 <button
                   type="button"
                   onClick={closeDeleteProjectModal}
@@ -2384,7 +2503,9 @@ export function Ui6ChatbotPage() {
               className="fixed left-1/2 top-1/2 z-[60] w-[min(520px,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2e2e2e] bg-[#121212] shadow-[0_28px_80px_rgba(0,0,0,0.7)]"
             >
               <div className="flex items-center justify-between border-b border-[#242424] px-5 py-4">
-                <h2 className="text-base font-medium text-[#ececec]">Rename Thread</h2>
+                <h2 className="text-base font-medium text-[#ececec]">
+                  Rename Thread
+                </h2>
                 <button
                   type="button"
                   onClick={cancelTitleEdit}

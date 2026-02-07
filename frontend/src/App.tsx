@@ -52,6 +52,7 @@ import { ProjectKanban } from '@/pages/ui-new/ProjectKanban';
 import { MigratePage } from '@/pages/ui-new/MigratePage';
 import { NewUiShowcaseLayout } from '@/pages/ui-showcase/NewUiShowcaseLayout';
 import { Ui6ChatbotPage } from '@/pages/ui-showcase/Ui6ChatbotPage';
+import { Toaster } from 'react-hot-toast';
 
 const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes);
 
@@ -195,7 +196,12 @@ function AppContent() {
 
             {/* ========== UI SHOWCASE ROUTES ========== */}
             <Route element={<NewUiShowcaseLayout />}>
-              <Route path="/new-ui" element={<Ui6ChatbotPage />} />
+              <Route path="/new-ui" element={
+                <>
+                  <Ui6ChatbotPage />
+                  <Toaster position="top-center" />
+                </>
+              } />
             </Route>
 
             {/* ========== NEW DESIGN ROUTES ========== */}
