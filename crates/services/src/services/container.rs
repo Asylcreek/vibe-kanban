@@ -19,6 +19,7 @@ use db::{
             CreateExecutionProcessRepoState, ExecutionProcessRepoState,
         },
         repo::Repo,
+        project_workspace_binding::ProjectWorkspaceBinding,
         session::{CreateSession, Session, SessionError},
         task::{Task, TaskStatus},
         workspace::{Workspace, WorkspaceError},
@@ -897,7 +898,18 @@ pub trait ContainerService {
                     }
                 };
 
-            if let Err(err) = self.ensure_container_exists(&workspace).await {
+            let should_ensure_container =
+                match ProjectWorkspaceBinding::find_by_workspace_id(&self.db().pool, workspace.id)
+                    .await
+                {
+                    Ok(Some(_)) => false,
+                    Ok(None) => true,
+                    Err(_) => true,
+            };
+
+            if should_ensure_container
+                && let Err(err) = self.ensure_container_exists(&workspace).await
+            {
                 tracing::warn!(
                     "Failed to recreate worktree before log normalization for workspace {}: {}",
                     workspace.id,

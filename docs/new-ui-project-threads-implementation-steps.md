@@ -34,7 +34,7 @@ Deliverable:
 - [x] Add execution path that runs in project repo root without worktree creation.
 - [x] Reuse existing executor spawn, approvals, logging, and process persistence.
 - [x] Ensure env vars remain populated (project/thread/session/process context).
-- [ ] Ensure no workspace-dependent code path is required for in-place mode.
+- [x] Ensure no workspace-dependent code path is required for in-place mode.
 - [ ] Add tests for in-place send lifecycle.
 
 Deliverable:

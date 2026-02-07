@@ -20,6 +20,7 @@ use db::models::{
     execution_process::{ExecutionProcess, ExecutionProcessRunReason},
     project::Project,
     project_repo::ProjectRepo,
+    project_workspace_binding::ProjectWorkspaceBinding,
     repo::Repo,
     session::{CreateSession, Session, SessionError},
     task::{CreateTask, Task, TaskStatus},
@@ -36,7 +37,6 @@ use executors::{
 use futures_util::{SinkExt, StreamExt, TryStreamExt};
 use serde::Deserialize;
 use services::services::container::ContainerService;
-use sqlx::FromRow;
 use ts_rs::TS;
 use utils::response::ApiResponse;
 use uuid::Uuid;
@@ -65,11 +65,6 @@ pub struct SendThreadMessageRequest {
 pub struct UpsertAssistantThreadMessageRequest {
     pub execution_process_id: Uuid,
     pub content: String,
-}
-
-#[derive(Debug, FromRow)]
-struct WorkspaceLookup {
-    workspace_id: Uuid,
 }
 
 async fn ensure_project_is_single_repo(
@@ -115,6 +110,38 @@ fn target_branch_for_repo(deployment: &DeploymentImpl, repo: &Repo) -> String {
         .unwrap_or_else(|| "main".to_string())
 }
 
+fn in_place_container_root_for_repo(repo: &Repo) -> Result<String, ApiError> {
+    let parent = repo.path.parent().ok_or_else(|| {
+        ApiError::BadRequest(format!(
+            "Repository '{}' does not have a parent directory for in-place mode",
+            repo.name
+        ))
+    })?;
+    Ok(parent.to_string_lossy().to_string())
+}
+
+async fn ensure_in_place_workspace_ready(
+    deployment: &DeploymentImpl,
+    workspace: &Workspace,
+    project_id: Uuid,
+) -> Result<Workspace, ApiError> {
+    let pool = &deployment.db().pool;
+    let repos = ProjectRepo::find_repos_for_project(pool, project_id).await?;
+    let repo = repos.first().ok_or_else(|| {
+        ApiError::BadRequest("Project has no repositories for in-place mode".to_string())
+    })?;
+    let container_ref = in_place_container_root_for_repo(repo)?;
+
+    if workspace.container_ref.as_deref() != Some(container_ref.as_str()) {
+        Workspace::update_container_ref(pool, workspace.id, &container_ref).await?;
+    }
+    Workspace::touch(pool, workspace.id).await?;
+
+    Workspace::find_by_id(pool, workspace.id)
+        .await?
+        .ok_or_else(|| ApiError::BadRequest("In-place workspace not found".to_string()))
+}
+
 pub async fn ensure_project_shared_workspace(
     deployment: &DeploymentImpl,
     project_id: Uuid,
@@ -123,22 +150,10 @@ pub async fn ensure_project_shared_workspace(
     let pool = &deployment.db().pool;
     let shared_task_title = format!("{}{}", NEW_UI_SHARED_TASK_PREFIX, project_name);
 
-    if let Some(row) = sqlx::query_as::<_, WorkspaceLookup>(
-        r#"SELECT w.id as workspace_id
-           FROM workspaces w
-           JOIN tasks t ON t.id = w.task_id
-           WHERE t.project_id = $1 AND t.title = $2
-           ORDER BY w.created_at ASC
-           LIMIT 1"#,
-    )
-    .bind(project_id)
-    .bind(&shared_task_title)
-    .fetch_optional(pool)
-    .await?
+    if let Some(binding) = ProjectWorkspaceBinding::find_by_project_id(pool, project_id).await?
+        && let Some(workspace) = Workspace::find_by_id(pool, binding.workspace_id).await?
     {
-        return Workspace::find_by_id(pool, row.workspace_id)
-            .await?
-            .ok_or_else(|| ApiError::BadRequest("Shared workspace not found".to_string()));
+        return ensure_in_place_workspace_ready(deployment, &workspace, project_id).await;
     }
 
     let repos = ProjectRepo::find_repos_for_project(pool, project_id).await?;
@@ -181,16 +196,12 @@ pub async fn ensure_project_shared_workspace(
         })
         .collect();
     WorkspaceRepo::create_many(pool, workspace.id, &workspace_repos).await?;
+    ProjectWorkspaceBinding::upsert(pool, project_id, workspace.id).await?;
 
-    if repos.len() == 1
-        && let Some(parent) = repos[0].path.parent()
-    {
-        Workspace::update_container_ref(pool, workspace.id, &parent.to_string_lossy()).await?;
-    }
-
-    Workspace::find_by_id(pool, workspace.id)
+    let workspace = Workspace::find_by_id(pool, workspace.id)
         .await?
-        .ok_or_else(|| ApiError::BadRequest("Failed to load shared workspace".to_string()))
+        .ok_or_else(|| ApiError::BadRequest("Failed to load shared workspace".to_string()))?;
+    ensure_in_place_workspace_ready(deployment, &workspace, project_id).await
 }
 
 async fn provision_isolated_workspace_for_thread(
@@ -373,7 +384,12 @@ async fn resolve_thread_workspace(
         && let Some(workspace_id) = binding.workspace_id
         && let Some(workspace) = Workspace::find_by_id(pool, workspace_id).await?
     {
-        return Ok(workspace);
+        return match thread.execution_mode {
+            ChatThreadExecutionMode::InPlace => {
+                ensure_project_shared_workspace(deployment, project.id, &project.name).await
+            }
+            ChatThreadExecutionMode::Isolated => Ok(workspace),
+        };
     }
 
     let workspace = match thread.execution_mode {
