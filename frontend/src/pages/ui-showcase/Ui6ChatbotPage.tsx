@@ -43,6 +43,8 @@ import {
 import { useUserSystem } from '@/components/ConfigProvider';
 import DisplayConversationEntry from '@/components/NormalizedConversation/DisplayConversationEntry';
 import WYSIWYGEditor from '@/components/ui/wysiwyg';
+import DiffCard from '@/components/DiffCard';
+import { ReviewProvider } from '@/contexts/ReviewProvider';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import {
   executionProcessesApi,
@@ -53,6 +55,49 @@ import {
 import { getVariantOptions } from '@/utils/executor';
 import { streamJsonPatchEntries } from '@/utils/streamJsonPatchEntries';
 import { useProjectDiffs } from '@/hooks/useProjectDiffs';
+
+// Wrapper component to handle expanded state for each diff card
+function DiffCardWrapper({
+  diff,
+  defaultExpanded,
+  repoId,
+  onReverted,
+}: {
+  diff: Diff;
+  defaultExpanded: boolean;
+  repoId: string | null;
+  onReverted: () => void;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [isReverting, setIsReverting] = useState(false);
+
+  const handleRevert = async () => {
+    if (!repoId) return;
+    const filePath = diff.newPath || diff.oldPath;
+    if (!filePath) return;
+
+    setIsReverting(true);
+    try {
+      await repoApi.revertFile(repoId, filePath);
+      onReverted();
+    } catch (error) {
+      toast.error(`Failed to revert ${filePath}`);
+      console.error('Revert error:', error);
+    } finally {
+      setIsReverting(false);
+    }
+  };
+
+  return (
+    <DiffCard
+      diff={diff}
+      expanded={expanded}
+      onToggle={() => setExpanded(!expanded)}
+      selectedAttempt={null}
+      onRevert={isReverting ? undefined : handleRevert}
+    />
+  );
+}
 
 interface Ui6Message {
   id: string;
@@ -645,6 +690,7 @@ function Ui6RightSidebar({
   onResizeStart,
   diffs,
   onRefreshDiffs,
+  repoId,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -653,6 +699,7 @@ function Ui6RightSidebar({
   onResizeStart: (event: React.PointerEvent<HTMLDivElement>) => void;
   diffs: Diff[];
   onRefreshDiffs?: () => void;
+  repoId: string | null;
 }) {
   const [activeTab, setActiveTab] = useState<'artifacts' | 'files' | 'changes'>('artifacts');
 
@@ -747,14 +794,26 @@ function Ui6RightSidebar({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto">
           {activeTab === 'changes' ? (
-            <div className="space-y-1">
+            <div className="space-y-0">
               {onRefreshDiffs && (
-                <div className="flex items-center justify-between px-2 py-2 border-b border-[#2a2a2a]">
-                  <span className="text-xs text-[#777777]">
-                    {diffs.length} {diffs.length === 1 ? 'file' : 'files'} changed
-                  </span>
+                <div className="flex items-center justify-between px-4 py-2 border-b border-[#333333] sticky top-0 bg-[#0d0d0d] z-10">
+                  <div className="flex items-center gap-2 text-xs text-[#777777]">
+                    <span>
+                      {diffs.length} {diffs.length === 1 ? 'file' : 'files'} changed
+                    </span>
+                    {diffs.length > 0 && (
+                      <>
+                        <span className="text-green-600 dark:text-green-500">
+                          +{diffs.reduce((sum, d) => sum + (d.additions ?? 0), 0)}
+                        </span>
+                        <span className="text-red-600 dark:text-red-500">
+                          -{diffs.reduce((sum, d) => sum + (d.deletions ?? 0), 0)}
+                        </span>
+                      </>
+                    )}
+                  </div>
                   <button
                     type="button"
                     onClick={onRefreshDiffs}
@@ -766,46 +825,21 @@ function Ui6RightSidebar({
                 </div>
               )}
               {diffs.length === 0 ? (
-                <div className="px-2 py-4 text-sm text-[#777777]">
+                <div className="px-4 py-8 text-sm text-[#777777]">
                   No changes
                 </div>
               ) : (
-                diffs.map((diff, index) => {
-                  const filePath = diff.newPath || diff.oldPath || `unknown-${index}`;
-                  const fileName = filePath.split('/').pop() || filePath;
-                  const isCode = /\.(ts|tsx|js|jsx|rs|py|go|java|cpp|c|h|cs|php|rb|scala|kt|swift|md)$/.test(fileName);
-
-                  return (
-                    <div
-                      key={filePath}
-                      className="flex items-center gap-2 rounded p-2 text-left transition-colors hover:bg-[#1a1a1a]"
-                    >
-                      {isCode ? (
-                        <FileCode className="h-4 w-4 flex-shrink-0 text-[#999999]" />
-                      ) : (
-                        <File className="h-4 w-4 flex-shrink-0 text-[#999999]" />
-                      )}
-                      <span className="min-w-0 flex-1 truncate text-sm text-[#e5e5e5]">
-                        {fileName}
-                      </span>
-                      <span className="text-xs text-[#999999] shrink-0">
-                        {diff.change === 'added' && (
-                          <span className="text-green-600 dark:text-green-500">+{diff.additions ?? 0}</span>
-                        )}
-                        {diff.change === 'modified' && (
-                          <>
-                            <span className="text-green-600 dark:text-green-500">+{diff.additions ?? 0}</span>
-                            <span className="mx-1"> </span>
-                            <span className="text-red-600 dark:text-red-500">-{diff.deletions ?? 0}</span>
-                          </>
-                        )}
-                        {diff.change === 'deleted' && (
-                          <span className="text-red-600 dark:text-red-500">-{diff.deletions ?? 0}</span>
-                        )}
-                      </span>
-                    </div>
-                  );
-                })
+                <ReviewProvider>
+                  {diffs.map((diff, index) => (
+                    <DiffCardWrapper
+                      key={diff.newPath || diff.oldPath || `unknown-${index}`}
+                      diff={diff}
+                      defaultExpanded={index === 0}
+                      repoId={repoId}
+                      onReverted={onRefreshDiffs || (() => {})}
+                    />
+                  ))}
+                </ReviewProvider>
               )}
             </div>
           ) : activeTab === 'artifacts' ? (
@@ -2416,6 +2450,7 @@ export function Ui6ChatbotPage() {
           onResizeStart={(event) => startResize('right', event)}
           diffs={diffs}
           onRefreshDiffs={refreshDiffs}
+          repoId={activeProjectRepoId}
         />
 
         {isCreateProjectModalOpen && (

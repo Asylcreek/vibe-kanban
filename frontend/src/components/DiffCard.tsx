@@ -19,6 +19,7 @@ import {
   Key,
   ExternalLink,
   MessageSquare,
+  RotateCcw,
 } from 'lucide-react';
 import '@/styles/diff-style-overrides.css';
 import { attemptsApi } from '@/lib/api';
@@ -42,6 +43,7 @@ type Props = {
   expanded: boolean;
   onToggle: () => void;
   selectedAttempt: Workspace | null;
+  onRevert?: () => void;
 };
 
 function labelAndIcon(diff: Diff) {
@@ -80,6 +82,7 @@ export default function DiffCard({
   expanded,
   onToggle,
   selectedAttempt,
+  onRevert,
 }: Props) {
   const { config } = useUserSystem();
   const theme = getActualTheme(config?.theme);
@@ -269,7 +272,7 @@ export default function DiffCard({
 
   return (
     <div className="my-4 border">
-      <div className="sticky top-0 z-[5] flex items-center px-4 py-2 bg-background border-b">
+      <div className="sticky top-9 z-[5] flex items-center px-4 py-2 bg-background border-b">
         {expandable && (
           <Button
             variant="ghost"
@@ -287,6 +290,20 @@ export default function DiffCard({
           </Button>
         )}
         {title}
+        {onRevert && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRevert();
+            }}
+            className="h-6 w-6 p-0 ml-2"
+            title="Revert file changes"
+          >
+            <RotateCcw className="h-3 w-3" aria-hidden />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="sm"

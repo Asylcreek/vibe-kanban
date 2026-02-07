@@ -4,13 +4,14 @@ use axum::{
     http::StatusCode,
     response::Json as ResponseJson,
     routing::{get, post},
+    Json,
 };
 use db::models::{
     project::SearchResult,
     repo::{Repo, UpdateRepo},
 };
 use deployment::Deployment;
-use git::{Commit, DiffTarget, GitBranch, GitRemote};
+use git::{Commit, DiffTarget, GitBranch, GitRemote, GitCli};
 use serde::{Deserialize, Serialize};
 use services::services::{
     file_search::SearchQuery,
@@ -45,6 +46,12 @@ pub struct InitRepoRequest {
 #[ts(export)]
 pub struct BatchRepoRequest {
     pub ids: Vec<Uuid>,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+pub struct RevertFileRequest {
+    pub file_path: String,
 }
 
 pub async fn register_repo(
@@ -315,6 +322,61 @@ pub async fn get_repo_diff(
     Ok(ResponseJson(ApiResponse::success(diffs)))
 }
 
+pub async fn revert_file(
+    State(deployment): State<DeploymentImpl>,
+    Path(repo_id): Path<Uuid>,
+    Json(req): Json<RevertFileRequest>,
+) -> Result<ResponseJson<ApiResponse<String>>, ApiError> {
+    let repo = deployment
+        .repo()
+        .get_by_id(&deployment.db().pool, repo_id)
+        .await?;
+
+    let repo_path = &repo.path;
+    let file_path = &req.file_path;
+
+    // Validate the file path is within the repo
+    let full_path = repo_path.join(file_path);
+    let canonical_repo = std::fs::canonicalize(repo_path)
+        .map_err(|e| ApiError::BadRequest(format!("Invalid repo path: {}", e)))?;
+    
+    // For new files, they won't exist yet, so skip canonicalization
+    if full_path.exists() {
+        let canonical_file = std::fs::canonicalize(&full_path)
+            .map_err(|e| ApiError::BadRequest(format!("Invalid file path: {}", e)))?;
+        
+        if !canonical_file.starts_with(&canonical_repo) {
+            return Err(ApiError::BadRequest(
+                "File path is outside the repository".to_string(),
+            ));
+        }
+    }
+
+    // Use git restore to discard changes (works for tracked files)
+    // This will restore the file to its state in HEAD
+    let git_cli = GitCli::new();
+    let restore_result = git_cli.git(repo_path, ["restore", file_path]);
+    
+    match restore_result {
+        Ok(_) => {
+            // Successfully restored from HEAD (file was tracked)
+            Ok(ResponseJson(ApiResponse::success(format!("Reverted {}", file_path))))
+        }
+        Err(_) => {
+            // File might be new/untracked, try to remove it
+            if full_path.exists() {
+                std::fs::remove_file(&full_path)
+                    .map_err(|e| ApiError::BadRequest(format!("Failed to remove file: {}", e)))?;
+                Ok(ResponseJson(ApiResponse::success(format!("Deleted new file {}", file_path))))
+            } else {
+                Err(ApiError::BadRequest(
+                    format!("File not found: {}", file_path)
+                ))
+            }
+        }
+    }
+}
+
 pub fn router() -> Router<DeploymentImpl> {
     Router::new()
         .route("/repos", get(get_repos).post(register_repo))
@@ -324,6 +386,7 @@ pub fn router() -> Router<DeploymentImpl> {
         .route("/repos/{repo_id}/branches", get(get_repo_branches))
         .route("/repos/{repo_id}/remotes", get(get_repo_remotes))
         .route("/repos/{repo_id}/diff", get(get_repo_diff))
+        .route("/repos/{repo_id}/revert-file", post(revert_file))
         .route("/repos/{repo_id}/prs", get(list_open_prs))
         .route("/repos/{repo_id}/search", get(search_repo))
         .route("/repos/{repo_id}/open-editor", post(open_repo_in_editor))

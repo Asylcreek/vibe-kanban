@@ -984,6 +984,14 @@ export const repoApi = {
     return handleApiResponse<Diff[]>(response);
   },
 
+  revertFile: async (repoId: string, filePath: string): Promise<string> => {
+    const response = await makeRequest(`/api/repos/${repoId}/revert-file`, {
+      method: 'POST',
+      body: JSON.stringify({ file_path: filePath }),
+    });
+    return handleApiResponse<string>(response);
+  },
+
   openEditor: async (
     repoId: string,
     data: OpenEditorRequest
