@@ -217,11 +217,9 @@ const MessageCard: React.FC<{
   expanded?: boolean;
   onToggle?: () => void;
 }> = ({ children, variant, expanded, onToggle }) => {
-  const frameBase =
-    'border px-3 py-2 w-full cursor-pointer  bg-[hsl(var(--card))] border-[hsl(var(--border))]';
-  const systemTheme = 'border-400/40 text-zinc-500';
-  const errorTheme =
-    'border-red-400/40 bg-red-50 dark:bg-[hsl(var(--card))] text-[hsl(var(--foreground))]';
+  const frameBase = 'w-full cursor-pointer py-1';
+  const systemTheme = 'text-gb-dark-gray';
+  const errorTheme = 'text-gb-error-red';
 
   return (
     <div
@@ -257,8 +255,8 @@ const ExpandChevron: React.FC<{
 }> = ({ expanded, onClick, variant }) => {
   const color =
     variant === 'system'
-      ? 'text-700 dark:text-300'
-      : 'text-red-700 dark:text-red-300';
+      ? 'text-gb-dark-gray hover:text-gb-fg'
+      : 'text-gb-red hover:text-gb-error-red';
 
   return (
     <ChevronDown
@@ -339,33 +337,25 @@ type ToolStatusAppearance = 'default' | 'denied' | 'timed_out';
 const PLAN_APPEARANCE: Record<
   ToolStatusAppearance,
   {
-    border: string;
-    headerBg: string;
     headerText: string;
-    contentBg: string;
     contentText: string;
+    indicator: string;
   }
 > = {
   default: {
-    border: 'border-blue-400/40',
-    headerBg: 'bg-blue-50 dark:bg-blue-950/20',
-    headerText: 'text-blue-700 dark:text-blue-300',
-    contentBg: 'bg-blue-50 dark:bg-blue-950/20',
-    contentText: 'text-blue-700 dark:text-blue-300',
+    headerText: 'text-gb-light-blue',
+    contentText: 'text-gb-gray',
+    indicator: 'bg-gb-light-blue',
   },
   denied: {
-    border: 'border-red-400/40',
-    headerBg: 'bg-red-50 dark:bg-red-950/20',
-    headerText: 'text-red-700 dark:text-red-300',
-    contentBg: 'bg-red-50 dark:bg-red-950/10',
-    contentText: 'text-red-700 dark:text-red-300',
+    headerText: 'text-gb-red',
+    contentText: 'text-gb-gray',
+    indicator: 'bg-gb-red',
   },
   timed_out: {
-    border: 'border-amber-400/40',
-    headerBg: 'bg-amber-50 dark:bg-amber-950/20',
-    headerText: 'text-amber-700 dark:text-amber-200',
-    contentBg: 'bg-amber-50 dark:bg-amber-950/10',
-    contentText: 'text-amber-700 dark:text-amber-200',
+    headerText: 'text-gb-bright-yellow',
+    contentText: 'text-gb-gray',
+    indicator: 'bg-gb-bright-yellow',
   },
 };
 
@@ -390,10 +380,8 @@ const PlanPresentationCard: React.FC<{
   const tone = PLAN_APPEARANCE[statusAppearance];
 
   return (
-    <div className="inline-block w-full">
-      <div
-        className={cn('border w-full overflow-hidden rounded-sm', tone.border)}
-      >
+    <div className="inline-block w-full font-mono">
+      <div className={cn('rounded border w-full overflow-hidden', tone.indicator, 'bg-gb-bg-dark/30')}>
         <button
           onClick={(e: React.MouseEvent) => {
             e.preventDefault();
@@ -405,14 +393,12 @@ const PlanPresentationCard: React.FC<{
               : t('conversation.planToggle.show')
           }
           className={cn(
-            'w-full px-2 py-1.5 flex items-center gap-1.5 text-left border-b',
-            tone.headerBg,
-            tone.headerText,
-            tone.border
+            'w-full px-3 py-2 flex items-center gap-1.5 text-left',
+            tone.headerText
           )}
         >
-          <span className=" min-w-0 truncate">
-            <span className="font-semibold">{t('conversation.plan')}</span>
+          <span className="min-w-0 truncate">
+            <span className="font-semibold text-sm">{t('conversation.plan')}</span>
           </span>
           <div className="ml-auto flex items-center gap-2">
             <ExpandChevron
@@ -424,15 +410,13 @@ const PlanPresentationCard: React.FC<{
         </button>
 
         {expanded && (
-          <div className={cn('px-3 py-2', tone.contentBg)}>
-            <div className={cn('text-sm', tone.contentText)}>
-              <WYSIWYGEditor
-                value={plan}
-                disabled
-                className="whitespace-pre-wrap break-words"
-                taskAttemptId={taskAttemptId}
-              />
-            </div>
+          <div className={cn('border-t border-gb-bg-dark px-3 py-2', tone.contentText)}>
+            <WYSIWYGEditor
+              value={plan}
+              disabled
+              className="whitespace-pre-wrap break-words text-sm"
+              taskAttemptId={taskAttemptId}
+            />
           </div>
         )}
       </div>
@@ -512,44 +496,44 @@ const ToolCallCard: React.FC<{
     : {};
 
   const headerClassName = cn(
-    'w-full flex items-center gap-1.5 text-left text-secondary-foreground'
+    'w-full flex items-center gap-1.5 text-left text-gb-gray hover:text-gb-fg transition-colors'
   );
 
   return (
-    <div className="inline-block w-full flex flex-col gap-4">
+    <div className="inline-block w-full flex flex-col gap-1.5 rounded border border-gb-bg-dark bg-gb-bg-dark/30 overflow-hidden font-mono">
       <HeaderWrapper {...headerProps} className={headerClassName}>
-        <span className=" min-w-0 flex items-center gap-1.5">
+        <span className="min-w-0 flex items-center gap-1.5 py-2 px-3">
           <span>
             {entryType && getStatusIndicator(entryType)}
             {entryType && getEntryIcon(entryType)}
           </span>
           {showInlineSummary ? (
-            <span className="text-sm font-mono">{inlineText}</span>
+            <span className="text-sm">{inlineText}</span>
           ) : (
-            <span className="text-sm font-mono">{label}</span>
+            <span className="text-sm">{label}</span>
           )}
         </span>
       </HeaderWrapper>
 
       {effectiveExpanded && (
-        <div className="max-h-[200px] overflow-y-auto border">
+        <div className="border-t border-gb-bg-dark px-3 py-2 max-h-[200px] overflow-y-auto">
           {isCommand ? (
             <>
               {argsText && (
                 <>
-                  <div className="font-normal uppercase bg-background border-b border-dashed px-2 py-1">
+                  <div className="font-normal uppercase text-xs text-gb-dark-gray py-1">
                     {t('conversation.args')}
                   </div>
-                  <div className="px-2 py-1">{argsText}</div>
+                  <div className="text-sm text-gb-gray py-1">{argsText}</div>
                 </>
               )}
 
               {output && (
                 <>
-                  <div className="font-normal uppercase bg-background border-y border-dashed px-2 py-1">
+                  <div className="font-normal uppercase text-xs text-gb-dark-gray py-1">
                     {t('conversation.output')}
                   </div>
-                  <div className="px-2 py-1">
+                  <div className="text-sm text-gb-gray py-1">
                     <RawLogText content={output} linkifyUrls={linkifyUrls} />
                   </div>
                 </>
@@ -559,16 +543,16 @@ const ToolCallCard: React.FC<{
             <>
               {isTool && actionType && (
                 <>
-                  <div className="font-normal uppercase bg-background border-b border-dashed px-2 py-1">
+                  <div className="font-normal uppercase text-xs text-gb-dark-gray py-1">
                     {t('conversation.args')}
                   </div>
-                  <div className="px-2 py-1">
+                  <div className="text-sm text-gb-gray py-1">
                     {renderJson(actionType.arguments)}
                   </div>
-                  <div className="font-normal uppercase bg-background border-y border-dashed px-2 py-1">
+                  <div className="font-normal uppercase text-xs text-gb-dark-gray py-1">
                     {t('conversation.result')}
                   </div>
-                  <div className="px-2 py-1">
+                  <div className="text-sm text-gb-gray py-1">
                     {actionType.result?.type.type === 'markdown' &&
                       actionType.result.value && (
                         <WYSIWYGEditor
@@ -860,7 +844,7 @@ function DisplayConversationEntry({
 
     const content = (
       <div
-        className={`px-4 py-2 text-sm space-y-3 ${greyed ? 'opacity-50 pointer-events-none' : ''}`}
+        className={`py-1 text-sm space-y-1 ${greyed ? 'opacity-50 pointer-events-none' : ''}`}
       >
         {body}
       </div>
@@ -887,7 +871,7 @@ function DisplayConversationEntry({
   if (isSystem || isError) {
     return (
       <div
-        className={`px-4 py-2 text-sm ${greyed ? 'opacity-50 pointer-events-none' : ''}`}
+        className={`py-1 text-sm ${greyed ? 'opacity-50 pointer-events-none' : ''}`}
       >
         <CollapsibleEntry
           content={isNormalizedEntry(entry) ? entry.content : ''}
@@ -903,7 +887,7 @@ function DisplayConversationEntry({
 
   if (isLoading) {
     return (
-      <div className="px-4 py-2 text-sm">
+      <div className="py-1 text-sm">
         <LoadingCard />
       </div>
     );
@@ -911,7 +895,7 @@ function DisplayConversationEntry({
 
   if (entry.entry_type.type === 'next_action') {
     return (
-      <div className="px-4 py-2 text-sm">
+      <div className="py-1 text-sm">
         <NextActionCard
           attemptId={taskAttempt?.id}
           sessionId={taskAttempt?.session?.id}
@@ -926,7 +910,7 @@ function DisplayConversationEntry({
   }
 
   return (
-    <div className="px-4 py-2 text-sm">
+    <div className="py-1 text-sm">
       <div className={getContentClassName(entryType)}>
         {shouldRenderMarkdown(entryType) ? (
           <WYSIWYGEditor

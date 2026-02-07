@@ -131,27 +131,31 @@ const FileChangeRenderer = ({
   }
 
   return (
-    <div>
-      <div className={headerClass}>
-        {icon}
-        <p
-          onClick={() => expandable && setExpanded()}
-          className="text-sm font-mono overflow-x-auto flex-1 cursor-pointer"
-        >
-          {titleNode}
-        </p>
+    <div className="rounded border border-gb-bg-dark bg-gb-bg-dark/30 overflow-hidden font-mono">
+      <div className="px-3 py-2">
+        <div className={headerClass}>
+          {icon}
+          <p
+            onClick={() => expandable && setExpanded()}
+            className="text-sm overflow-x-auto flex-1 cursor-pointer"
+          >
+            {titleNode}
+          </p>
+        </div>
       </div>
 
       {/* Body */}
       {isWrite(change) && effectiveExpanded && (
-        <FileContentView
-          content={change.content}
-          lang={getHighLightLanguageFromPath(path)}
-          theme={theme}
-        />
+        <div className="border-t border-gb-bg-dark px-3 py-2">
+          <FileContentView
+            content={change.content}
+            lang={getHighLightLanguageFromPath(path)}
+            theme={theme}
+          />
+        </div>
       )}
     </div>
   );
-};
+}
 
 export default FileChangeRenderer;

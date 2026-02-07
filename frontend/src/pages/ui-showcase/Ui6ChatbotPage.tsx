@@ -18,7 +18,6 @@ import {
   Settings,
   Square,
   Trash2,
-  User,
   X,
   Zap,
   RefreshCw,
@@ -297,8 +296,17 @@ function Ui6ChatInput({
   };
 
   return (
-    <div className="w-full">
-      <div className="flex flex-col rounded-lg border border-gb-medium-gray bg-gb-bg transition-colors focus-within:border-gb-comment">
+    <div className="w-full font-mono">
+      {/* Shell prompt line */}
+      <div className="mb-2 flex items-center gap-2 text-xs">
+        <span className="text-gb-soft-green">➜</span>
+        <span className="text-gb-light-blue">~</span>
+        <span className="text-gb-comment">
+          {canStop ? '(running)' : '(waiting)'}
+        </span>
+      </div>
+
+      <div className="flex flex-col rounded border border-gb-medium-gray bg-gb-bg transition-colors focus-within:border-gb-comment">
         <textarea
           value={message}
           onChange={(event) => setMessage(event.target.value)}
@@ -308,28 +316,31 @@ function Ui6ChatInput({
               handleSubmit();
             }
           }}
-          placeholder="Ask for follow-up changes"
-          className="min-h-[110px] max-h-[220px] w-full resize-none overflow-y-auto border-0 bg-transparent px-4 pt-4 text-sm text-gb-fg placeholder:text-gb-medium-gray outline-none"
+          placeholder="Enter your command..."
+          className="min-h-[100px] max-h-[200px] w-full resize-none overflow-y-auto border-0 bg-transparent px-4 pt-3 text-sm text-gb-fg placeholder:text-gb-medium-gray outline-none font-mono"
           disabled={disabled}
+          style={{
+            caretColor: '#d65d0e',
+          }}
         />
 
         <div className="flex flex-shrink-0 items-center justify-between border-t border-gb-bg-dark px-3 py-2">
           <div className="flex items-center gap-1">
             <button
               type="button"
-              className="flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-gb-dark-gray transition-colors hover:bg-gb-bg-light"
+              className="flex h-7 w-7 items-center justify-center rounded bg-transparent p-0 text-gb-dark-gray transition-colors hover:bg-gb-bg-light font-sans"
               aria-label="Add attachments"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-3.5 w-3.5" />
             </button>
 
-            <label className="flex h-8 min-w-[120px] items-center gap-1 rounded px-2 text-sm text-gb-fg transition-colors hover:bg-gb-bg-light">
+            <label className="flex h-7 min-w-[100px] items-center gap-1 rounded px-2 text-xs text-gb-fg transition-colors hover:bg-gb-bg-light font-sans">
               <select
                 value={selectedExecutor ?? ''}
                 onChange={(event) =>
                   onExecutorChange(event.target.value as BaseCodingAgent)
                 }
-                className="max-w-[110px] appearance-none border-0 bg-transparent outline-none"
+                className="max-w-[90px] appearance-none border-0 bg-transparent outline-none"
                 disabled={disabled || executorOptions.length === 0}
               >
                 {executorOptions.map((executor) => (
@@ -338,10 +349,10 @@ function Ui6ChatInput({
                   </option>
                 ))}
               </select>
-              <ChevronDown className="h-3 w-3 text-gb-comment" />
+              <ChevronDown className="h-2.5 w-2.5 text-gb-comment" />
             </label>
 
-            <label className="flex h-8 min-w-[72px] items-center gap-1 rounded px-2 text-sm text-gb-fg transition-colors hover:bg-gb-bg-light">
+            <label className="flex h-7 min-w-[60px] items-center gap-1 rounded px-2 text-xs text-gb-fg transition-colors hover:bg-gb-bg-light font-sans">
               <select
                 value={selectedVariant ?? ''}
                 onChange={(event) =>
@@ -356,30 +367,33 @@ function Ui6ChatInput({
                   </option>
                 ))}
               </select>
-              <ChevronDown className="h-3 w-3 text-gb-comment" />
+              <ChevronDown className="h-2.5 w-2.5 text-gb-comment" />
             </label>
           </div>
 
           <div className="flex items-center gap-1">
             <button
               type="button"
-              className="flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-gb-dark-gray transition-colors hover:bg-gb-bg-light"
+              className="flex h-7 w-7 items-center justify-center rounded bg-transparent p-0 text-gb-dark-gray transition-colors hover:bg-gb-bg-light font-sans"
               aria-label="Voice input"
             >
-              <Mic className="h-4 w-4" />
+              <Mic className="h-3.5 w-3.5" />
             </button>
 
             <button
               type="button"
               onClick={handleSubmit}
               disabled={canStop ? false : !message.trim() || disabled}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-gb-bright-yellow p-0 transition-colors hover:bg-gb-soft-yellow disabled:opacity-30 disabled:hover:bg-gb-bright-yellow"
+              className="flex h-7 w-7 items-center justify-center rounded bg-gb-bright-yellow p-0 transition-colors hover:bg-gb-soft-yellow disabled:opacity-30 disabled:hover:bg-gb-bright-yellow font-sans"
               aria-label={canStop ? 'Stop' : 'Send message'}
             >
               {canStop ? (
-                <Square className="h-4 w-4 text-gb-dark0" fill="currentColor" />
+                <Square
+                  className="h-3.5 w-3.5 text-gb-dark0"
+                  fill="currentColor"
+                />
               ) : (
-                <ArrowUp className="h-4 w-4 text-gb-dark0" />
+                <ArrowUp className="h-3.5 w-3.5 text-gb-dark0" />
               )}
             </button>
           </div>
@@ -398,7 +412,6 @@ function Ui6ChatMessage({
   assistantLabel: string;
   normalizedEntries?: PatchType[];
 }) {
-  const assistantBadge = assistantInitial(assistantLabel);
   const renderableEntries = useMemo(
     () => getRenderableNormalizedEntries(normalizedEntries ?? []),
     [normalizedEntries]
@@ -407,51 +420,68 @@ function Ui6ChatMessage({
 
   return (
     <div
-      className={`px-6 py-6 transition-colors ${
-        message.isUser ? 'bg-gb-dark0' : 'bg-gb-dark hover:bg-gb-bg'
+      className={`py-4 transition-colors ${
+        message.isUser
+          ? 'bg-gb-dark0 px-3'
+          : 'bg-transparent border-l-2 border-gb-medium-gray px-2'
       }`}
     >
-      <div className="flex max-w-none gap-4">
-        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gb-orange to-gb-red text-white">
-          {message.isUser ? <User className="h-4 w-4" /> : assistantBadge}
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="mb-2 flex items-center gap-2">
-            <span className="text-sm font-medium text-gb-fg">
-              {message.isUser ? 'You' : assistantLabel}
-            </span>
-            <span className="text-xs text-gb-comment">
+      {message.isUser ? (
+        // User message - right aligned like a chat
+        <div className="flex justify-end">
+          <div className="max-w-2xl">
+            <div className="text-sm text-gb-fg whitespace-pre-wrap break-words text-right">
+              {message.text}
+            </div>
+            <div className="mt-1 text-xs text-gb-comment text-right font-mono">
               {message.timestamp.toLocaleTimeString([], {
                 hour: '2-digit',
                 minute: '2-digit',
               })}
-            </span>
-          </div>
-          <div className="whitespace-pre-wrap break-words text-gb-gray leading-relaxed">
-            {message.isUser ? (
-              message.text
-            ) : showNormalized ? (
-              <div className="space-y-2">
-                {renderableEntries.map((entryItem) => (
-                  <DisplayConversationEntry
-                    key={`${message.id}-${entryItem.id}`}
-                    expansionKey={`${message.id}-${entryItem.id}`}
-                    entry={entryItem.entry}
-                    executionProcessId={message.executionProcessId ?? undefined}
-                  />
-                ))}
-              </div>
-            ) : (
-              <WYSIWYGEditor
-                value={message.text}
-                disabled
-                className="min-h-0 bg-transparent p-0 text-gb-gray [&_p]:mb-2 [&_p:last-child]:mb-0"
-              />
-            )}
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        // Assistant message - left aligned like a chat
+        <div className="flex gap-3 max-w-3xl pl-2">
+          <div className="min-w-0 flex-1">
+            <div className="mb-1.5 flex items-center gap-2">
+              <span className="text-xs font-medium text-gb-fg font-mono">
+                {assistantLabel}
+              </span>
+              <span className="text-xs text-gb-comment font-mono">
+                {message.timestamp.toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
+            </div>
+
+            <div className="text-sm text-gb-gray leading-relaxed">
+              {showNormalized ? (
+                <div className="space-y-3">
+                  {renderableEntries.map((entryItem) => (
+                    <DisplayConversationEntry
+                      key={`${message.id}-${entryItem.id}`}
+                      expansionKey={`${message.id}-${entryItem.id}`}
+                      entry={entryItem.entry}
+                      executionProcessId={
+                        message.executionProcessId ?? undefined
+                      }
+                    />
+                  ))}
+                </div>
+              ) : (
+                <WYSIWYGEditor
+                  value={message.text}
+                  disabled
+                  className="min-h-0 bg-transparent p-0 text-gb-gray [&_p]:mb-2 [&_p:last-child]:mb-0"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -459,24 +489,27 @@ function Ui6ChatMessage({
 function Ui6TypingIndicator({ assistantLabel }: { assistantLabel: string }) {
   const assistantBadge = assistantInitial(assistantLabel);
   return (
-    <div className="bg-gb-dark px-6 py-6">
-      <div className="flex max-w-none gap-4">
-        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gb-orange to-gb-red text-white">
+    <div className="bg-gb-dark px-6 py-4 border-b border-gb-bg-dark">
+      <div className="flex gap-3">
+        <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded bg-gb-bg-dark text-gb-orange font-mono text-xs font-bold">
           {assistantBadge}
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="mb-2 flex items-center gap-2">
-            <span className="text-sm font-medium text-gb-fg">
+          <div className="mb-1.5 flex items-center gap-2">
+            <span className="text-xs font-medium text-gb-fg font-mono">
               {assistantLabel}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex space-x-1">
-              <div className="h-2 w-2 animate-bounce rounded-full bg-gb-comment [animation-delay:-0.3s]" />
-              <div className="h-2 w-2 animate-bounce rounded-full bg-gb-comment [animation-delay:-0.15s]" />
-              <div className="h-2 w-2 animate-bounce rounded-full bg-gb-comment" />
+              <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-gb-orange [animation-delay:-0.3s]" />
+              <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-gb-orange [animation-delay:-0.15s]" />
+              <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-gb-orange" />
             </div>
+            <span className="text-xs text-gb-comment font-mono">
+              processing...
+            </span>
           </div>
         </div>
       </div>
@@ -535,27 +568,26 @@ function Ui6Welcome({
 
             <div className="space-y-3">
               <p className="text-sm text-gb-fg leading-relaxed">
-                You are standing in an open terminal. An AI awaits your
-                commands.
+                AI terminal ready. Awaiting your command.
               </p>
 
               <div className="mt-6 space-y-2 rounded bg-gb-bg-dark p-4">
                 <div className="flex items-center gap-2 text-xs">
                   <span className="text-gb-soft-green">➜</span>
                   <span className="text-gb-light-blue">~</span>
-                  <span className="text-gb-fg">cat instructions.txt</span>
+                  <span className="text-gb-fg">cat help.txt</span>
                 </div>
 
-                <div className="ml-4 border-l-2 border-gb-medium-gray pl-3 text-xs text-gb-gray">
-                  <p className="mb-1">
-                    <span className="text-gb-orange">ENTER</span> to send
+                <div className="ml-4 border-l-2 border-gb-medium-gray pl-3 text-xs text-gb-gray space-y-1">
+                  <p>
+                    <span className="text-gb-orange">⏎</span> send command
                   </p>
-                  <p className="mb-1">
-                    <span className="text-gb-orange">Shift + Enter</span> for a
-                    new line
+                  <p>
+                    <span className="text-gb-orange">⇧⏎</span> insert newline
                   </p>
-                  <p className="mb-3">
-                    <span className="text-gb-bright-yellow">@</span> to mention files
+                  <p>
+                    <span className="text-gb-bright-yellow">@</span> to
+                    reference files
                   </p>
                 </div>
               </div>
@@ -2014,6 +2046,16 @@ export function Ui6ChatbotPage() {
 
   return (
     <div className="new-design gruvbox-baby h-screen w-full">
+      {/* CRT scanline overlay - subtle effect */}
+      <div
+        className="pointer-events-none fixed inset-0 z-[100] opacity-[0.03]"
+        style={{
+          backgroundImage:
+            'repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(0, 0, 0, 0.1) 1px, rgba(0, 0, 0, 0.1) 2px)',
+          backgroundSize: '100% 4px',
+        }}
+      />
+
       <div className="relative flex h-screen w-full overflow-hidden">
         {isMobile && (isLeftSidebarOpen || isRightSidebarOpen) && (
           <button
@@ -2116,7 +2158,9 @@ export function Ui6ChatbotPage() {
                       <div key={project.id}>
                         <div
                           className={`group relative flex w-full items-center gap-1 rounded transition-colors hover:bg-gb-bg-light ${
-                            activeProjectId === project.id ? 'bg-gb-bg-dark' : ''
+                            activeProjectId === project.id
+                              ? 'bg-gb-bg-dark'
+                              : ''
                           }`}
                         >
                           <button
@@ -2198,42 +2242,54 @@ export function Ui6ChatbotPage() {
                                 No threads
                               </p>
                             ) : (
-                              projectThreads.map((thread) => (
-                                <div
-                                  key={thread.id}
-                                  className="group flex w-full items-center rounded transition-colors hover:bg-gb-bg-light"
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      handleOpenThread(project.id, thread);
-                                      if (isMobile) setIsLeftSidebarOpen(false);
-                                    }}
-                                    className="flex min-w-0 flex-1 items-center rounded px-2 py-1.5 text-left text-sm text-gb-comment transition-colors hover:text-gb-fg"
+                              projectThreads.map((thread) => {
+                                const isActive = currentChat?.id === thread.id;
+                                return (
+                                  <div
+                                    key={thread.id}
+                                    className={`group flex w-full items-center rounded transition-colors ${
+                                      isActive
+                                        ? 'bg-gb-bright-yellow/20 border-l-2 border-gb-bright-yellow'
+                                        : 'hover:bg-gb-bg-light'
+                                    }`}
                                   >
-                                    <span className="truncate">
-                                      {thread.title}
-                                    </span>
-                                  </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        handleOpenThread(project.id, thread);
+                                        if (isMobile)
+                                          setIsLeftSidebarOpen(false);
+                                      }}
+                                      className={`flex min-w-0 flex-1 items-center rounded px-2 py-1.5 text-left text-sm transition-colors ${
+                                        isActive
+                                          ? 'text-gb-fg font-medium'
+                                          : 'text-gb-comment hover:text-gb-fg'
+                                      }`}
+                                    >
+                                      <span className="truncate">
+                                        {thread.title}
+                                      </span>
+                                    </button>
 
-                                  <button
-                                    type="button"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      openRenameModal({
-                                        threadId: thread.id,
-                                        projectId: project.id,
-                                        title: thread.title,
-                                      });
-                                    }}
-                                    className="pointer-events-none mr-1 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-gb-dark-gray opacity-0 transition-all hover:bg-gb-bg hover:text-gb-fg group-hover:pointer-events-auto group-hover:opacity-100 focus:pointer-events-auto focus:opacity-100 focus:outline-none"
-                                    aria-label={`Rename ${thread.title}`}
-                                    title="Rename thread"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </button>
-                                </div>
-                              ))
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        openRenameModal({
+                                          threadId: thread.id,
+                                          projectId: project.id,
+                                          title: thread.title,
+                                        });
+                                      }}
+                                      className="pointer-events-none mr-1 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-gb-dark-gray opacity-0 transition-all hover:bg-gb-bg hover:text-gb-fg group-hover:pointer-events-auto group-hover:opacity-100 focus:pointer-events-auto focus:opacity-100 focus:outline-none"
+                                      aria-label={`Rename ${thread.title}`}
+                                      title="Rename thread"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                );
+                              })
                             )}
                           </div>
                         )}
@@ -2537,7 +2593,9 @@ export function Ui6ChatbotPage() {
                   This action is destructive and cannot be undone.
                 </p>
                 {deleteProjectError && (
-                  <p className="text-xs text-gb-error-red">{deleteProjectError}</p>
+                  <p className="text-xs text-gb-error-red">
+                    {deleteProjectError}
+                  </p>
                 )}
               </div>
 

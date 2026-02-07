@@ -98,25 +98,27 @@ function EditDiffRenderer({
   );
 
   return (
-    <div>
-      <div className={headerClass}>
-        <SquarePen className="h-3 w-3" />
-        <p
-          onClick={() => setExpanded()}
-          className="text-sm font-mono overflow-x-auto flex-1 cursor-pointer"
-        >
-          {path}{' '}
-          <span style={{ color: 'hsl(var(--console-success))' }}>
-            +{additions}
-          </span>{' '}
-          <span style={{ color: 'hsl(var(--console-error))' }}>
-            -{deletions}
-          </span>
-        </p>
+    <div className="rounded border border-gb-bg-dark bg-gb-bg-dark/30 overflow-hidden font-mono">
+      <div className="px-3 py-2">
+        <div className={headerClass}>
+          <SquarePen className="h-3 w-3" />
+          <p
+            onClick={() => setExpanded()}
+            className="text-sm overflow-x-auto flex-1 cursor-pointer"
+          >
+            {path}{' '}
+            <span style={{ color: 'hsl(var(--console-success))' }}>
+              +{additions}
+            </span>{' '}
+            <span style={{ color: 'hsl(var(--console-error))' }}>
+              -{deletions}
+            </span>
+          </p>
+        </div>
       </div>
 
       {effectiveExpanded && (
-        <div className={'mt-2 border ' + hideLineNumbersClass}>
+        <div className={'border-t border-gb-bg-dark ' + hideLineNumbersClass}>
           {isValidDiff ? (
             <DiffView
               data={diffData}
@@ -129,7 +131,7 @@ function EditDiffRenderer({
           ) : (
             <>
               <pre
-                className="px-4 pb-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap"
+                className="px-4 pb-4 text-xs overflow-x-auto whitespace-pre-wrap"
                 style={{ color: 'hsl(var(--muted-foreground) / 0.9)' }}
               >
                 {unifiedDiff}
