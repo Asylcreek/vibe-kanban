@@ -85,6 +85,32 @@ pub struct LocalContainerService {
 }
 
 impl LocalContainerService {
+    fn canonicalize_for_compare(path: &Path) -> PathBuf {
+        let normalized = utils::path::normalize_macos_private_alias(path);
+        if normalized.is_absolute() {
+            std::fs::canonicalize(&normalized).unwrap_or(normalized)
+        } else {
+            let absolute = std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("/"))
+                .join(normalized);
+            std::fs::canonicalize(&absolute).unwrap_or(absolute)
+        }
+    }
+
+    fn is_in_place_workspace_root(workspace_dir: &Path, repositories: &[Repo]) -> bool {
+        if repositories.is_empty() {
+            return false;
+        }
+
+        let workspace_dir = Self::canonicalize_for_compare(workspace_dir);
+        repositories.iter().all(|repo| {
+            let repo_path = Self::canonicalize_for_compare(&repo.path);
+            let repo_parent = repo_path.parent().map(Path::to_path_buf);
+            repo_parent.as_ref() == Some(&workspace_dir)
+                && workspace_dir.join(&repo.name) == repo_path
+        })
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
         db: DBService,
@@ -190,6 +216,12 @@ impl LocalContainerService {
             {
                 tracing::warn!("Failed to remove workspace directory: {}", e);
             }
+        } else if Self::is_in_place_workspace_root(&workspace_dir, &repositories) {
+            tracing::info!(
+                "Skipping filesystem cleanup for in-place workspace {} at {}",
+                workspace.id,
+                workspace_dir.display()
+            );
         } else {
             WorkspaceManager::cleanup_workspace(&workspace_dir, &repositories)
                 .await
@@ -1096,8 +1128,16 @@ impl ContainerService for LocalContainerService {
             WorkspaceManager::get_workspace_base_dir().join(&workspace_dir_name)
         };
 
-        WorkspaceManager::ensure_workspace_exists(&workspace_dir, &repositories, &workspace.branch)
+        let is_in_place = Self::is_in_place_workspace_root(&workspace_dir, &repositories);
+
+        if !is_in_place {
+            WorkspaceManager::ensure_workspace_exists(
+                &workspace_dir,
+                &repositories,
+                &workspace.branch,
+            )
             .await?;
+        }
 
         if workspace.container_ref.is_none() {
             Workspace::update_container_ref(
@@ -1106,6 +1146,10 @@ impl ContainerService for LocalContainerService {
                 &workspace_dir.to_string_lossy(),
             )
             .await?;
+        }
+
+        if is_in_place {
+            return Ok(workspace_dir.to_string_lossy().to_string());
         }
 
         // Copy project files and images (fast no-op if already exist)

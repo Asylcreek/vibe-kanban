@@ -32,10 +32,12 @@ import {
   type ChatThreadMessage,
   type ChatThreadExecutionMode,
   type ExecutionProcess,
+  type NormalizedEntry,
   type PatchType,
   type Project,
 } from 'shared/types';
 import { useUserSystem } from '@/components/ConfigProvider';
+import DisplayConversationEntry from '@/components/NormalizedConversation/DisplayConversationEntry';
 import WYSIWYGEditor from '@/components/ui/wysiwyg';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { executionProcessesApi, newUiApi, projectsApi, repoApi } from '@/lib/api';
@@ -46,6 +48,7 @@ interface Ui6Message {
   id: string;
   text: string;
   isUser: boolean;
+  executionProcessId: string | null;
   timestamp: Date;
 }
 
@@ -76,6 +79,7 @@ function toUiMessage(message: ChatThreadMessage): Ui6Message {
     id: message.id,
     text: message.content,
     isUser: message.role === 'user',
+    executionProcessId: message.execution_process_id,
     timestamp: new Date(message.created_at),
   };
 }
@@ -91,6 +95,33 @@ function extractAssistantText(entries: PatchType[]): string {
     .filter(Boolean);
 
   return assistantEntries[assistantEntries.length - 1] ?? '';
+}
+
+function getRenderableNormalizedEntries(
+  entries: PatchType[]
+): Array<{ id: string; entry: NormalizedEntry }> {
+  const skippedTypes = new Set([
+    'user_message',
+    'system_message',
+    'next_action',
+    'token_usage_info',
+    'loading',
+  ]);
+
+  const renderable: Array<{ id: string; entry: NormalizedEntry }> = [];
+  const seen = new Set<string>();
+
+  entries.forEach((entry, idx) => {
+    if (entry.type !== 'NORMALIZED_ENTRY') return;
+    const entryType = entry.content.entry_type.type;
+    if (skippedTypes.has(entryType)) return;
+    const dedupeKey = `${entryType}:${entry.content.content}`;
+    if (seen.has(dedupeKey)) return;
+    seen.add(dedupeKey);
+    renderable.push({ id: `${entryType}-${idx}`, entry: entry.content });
+  });
+
+  return renderable;
 }
 
 function readThreadPrefs(): Record<string, ExecutorPrefs> {
@@ -300,11 +331,19 @@ function Ui6ChatInput({
 function Ui6ChatMessage({
   message,
   assistantLabel,
+  normalizedEntries,
 }: {
   message: Ui6Message;
   assistantLabel: string;
+  normalizedEntries?: PatchType[];
 }) {
   const assistantBadge = assistantInitial(assistantLabel);
+  const renderableEntries = useMemo(
+    () => getRenderableNormalizedEntries(normalizedEntries ?? []),
+    [normalizedEntries]
+  );
+  const showNormalized = !message.isUser && renderableEntries.length > 0;
+
   return (
     <div
       className={`px-6 py-6 transition-colors ${
@@ -333,6 +372,17 @@ function Ui6ChatMessage({
           <div className="whitespace-pre-wrap break-words text-[#d6d6d6] leading-relaxed">
             {message.isUser ? (
               message.text
+            ) : showNormalized ? (
+              <div className="space-y-2">
+                {renderableEntries.map((entryItem) => (
+                  <DisplayConversationEntry
+                    key={`${message.id}-${entryItem.id}`}
+                    expansionKey={`${message.id}-${entryItem.id}`}
+                    entry={entryItem.entry}
+                    executionProcessId={message.executionProcessId ?? undefined}
+                  />
+                ))}
+              </div>
             ) : (
               <WYSIWYGEditor
                 value={message.text}
@@ -766,9 +816,15 @@ export function Ui6ChatbotPage() {
   );
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(256);
   const [rightSidebarWidth, setRightSidebarWidth] = useState(320);
+  const [normalizedEntriesByMessageId, setNormalizedEntriesByMessageId] =
+    useState<Record<string, PatchType[]>>({});
 
   const messageScrollRef = useRef<HTMLDivElement | null>(null);
   const loadedThreadMessagesRef = useRef<Set<string>>(new Set());
+  const hydratedProcessIdsRef = useRef<Set<string>>(new Set());
+  const historicalStreamsRef = useRef<
+    Map<string, ReturnType<typeof streamJsonPatchEntries<PatchType>>>
+  >(new Map());
   const activeStreamRef = useRef<ReturnType<
     typeof streamJsonPatchEntries<PatchType>
   > | null>(null);
@@ -831,6 +887,8 @@ export function Ui6ChatbotPage() {
       activeStreamRef.current?.close();
       activeStreamRef.current = null;
       activeStreamMetaRef.current = null;
+      historicalStreamsRef.current.forEach((controller) => controller.close());
+      historicalStreamsRef.current.clear();
     };
   }, []);
 
@@ -997,7 +1055,8 @@ export function Ui6ChatbotPage() {
   const setAssistantMessage = useCallback((
     chatId: string,
     messageId: string,
-    text: string
+    text: string,
+    executionProcessId: string | null = null
   ) => {
     setChats((prev) =>
       prev.map((chat) => {
@@ -1008,7 +1067,14 @@ export function Ui6ChatbotPage() {
         );
         const updatedMessages = existingMessage
           ? chat.messages.map((message) =>
-              message.id === messageId ? { ...message, text } : message
+              message.id === messageId
+                ? {
+                    ...message,
+                    text,
+                    executionProcessId:
+                      executionProcessId ?? message.executionProcessId,
+                  }
+                : message
             )
           : [
               ...chat.messages,
@@ -1016,6 +1082,7 @@ export function Ui6ChatbotPage() {
                 id: messageId,
                 text,
                 isUser: false,
+                executionProcessId,
                 timestamp: new Date(),
               },
             ];
@@ -1028,6 +1095,16 @@ export function Ui6ChatbotPage() {
       })
     );
   }, []);
+
+  const setMessageNormalizedEntries = useCallback(
+    (messageId: string, entries: PatchType[]) => {
+      setNormalizedEntriesByMessageId((prev) => ({
+        ...prev,
+        [messageId]: entries,
+      }));
+    },
+    []
+  );
 
   const upsertThreadMessages = useCallback((
     projectId: string,
@@ -1060,13 +1137,47 @@ export function Ui6ChatbotPage() {
       return;
     }
     const messages = await newUiApi.listThreadMessages(threadId);
+    const uiMessages = messages.map(toUiMessage);
     upsertThreadMessages(
       projectId,
       threadId,
-      messages.map(toUiMessage)
+      uiMessages
     );
     loadedThreadMessagesRef.current.add(threadId);
-  }, [upsertThreadMessages]);
+
+    uiMessages
+      .filter(
+        (message) => !message.isUser && Boolean(message.executionProcessId)
+      )
+      .forEach((message) => {
+        const processId = message.executionProcessId!;
+        if (
+          hydratedProcessIdsRef.current.has(processId) ||
+          historicalStreamsRef.current.has(processId)
+        ) {
+          return;
+        }
+
+        const controller = streamJsonPatchEntries<PatchType>(
+          `/api/execution-processes/${processId}/normalized-logs/ws`,
+          {
+            onEntries: (entries) => {
+              setMessageNormalizedEntries(message.id, entries);
+            },
+            onFinished: (entries) => {
+              setMessageNormalizedEntries(message.id, entries);
+              hydratedProcessIdsRef.current.add(processId);
+              historicalStreamsRef.current.delete(processId);
+            },
+            onError: () => {
+              historicalStreamsRef.current.delete(processId);
+            },
+          }
+        );
+
+        historicalStreamsRef.current.set(processId, controller);
+      });
+  }, [setMessageNormalizedEntries, upsertThreadMessages]);
 
   const persistAssistantMessage = useCallback(async (
     threadId: string,
@@ -1119,12 +1230,19 @@ export function Ui6ChatbotPage() {
       `/api/execution-processes/${processId}/normalized-logs/ws`,
       {
         onEntries: (entries) => {
+          setMessageNormalizedEntries(assistantMessageId, entries);
           const assistantText = extractAssistantText(entries);
           if (assistantText) {
-            setAssistantMessage(threadId, assistantMessageId, assistantText);
+            setAssistantMessage(
+              threadId,
+              assistantMessageId,
+              assistantText,
+              processId
+            );
           }
         },
         onFinished: (entries) => {
+          setMessageNormalizedEntries(assistantMessageId, entries);
           const assistantText = extractAssistantText(entries);
           void executionProcessesApi
             .getDetails(processId)
@@ -1133,12 +1251,22 @@ export function Ui6ChatbotPage() {
                 process,
                 assistantText
               );
-              setAssistantMessage(threadId, assistantMessageId, finalText);
+              setAssistantMessage(
+                threadId,
+                assistantMessageId,
+                finalText,
+                processId
+              );
               return persistAssistantMessage(threadId, processId, finalText);
             })
             .catch(() => {
               const fallback = assistantText || 'Completed.';
-              setAssistantMessage(threadId, assistantMessageId, fallback);
+              setAssistantMessage(
+                threadId,
+                assistantMessageId,
+                fallback,
+                processId
+              );
               return persistAssistantMessage(threadId, processId, fallback);
             })
             .finally(() => {
@@ -1149,7 +1277,7 @@ export function Ui6ChatbotPage() {
         },
         onError: () => {
           const text = 'Stream failed.';
-          setAssistantMessage(threadId, assistantMessageId, text);
+          setAssistantMessage(threadId, assistantMessageId, text, processId);
           void persistAssistantMessage(threadId, processId, text);
           setIsTyping(false);
           activeStreamRef.current = null;
@@ -1160,6 +1288,7 @@ export function Ui6ChatbotPage() {
   }, [
     finalizeAssistantMessageText,
     persistAssistantMessage,
+    setMessageNormalizedEntries,
     setAssistantMessage,
   ]);
 
@@ -1288,6 +1417,7 @@ export function Ui6ChatbotPage() {
         id: `${Date.now()}-user`,
         text: trimmed,
         isUser: true,
+        executionProcessId: null,
         timestamp: new Date(),
       };
 
@@ -1338,6 +1468,7 @@ export function Ui6ChatbotPage() {
       id: `${Date.now()}-user`,
       text: trimmed,
       isUser: true,
+      executionProcessId: null,
       timestamp: new Date(),
     };
 
@@ -2012,6 +2143,7 @@ export function Ui6ChatbotPage() {
                       key={message.id}
                       message={message}
                       assistantLabel={assistantLabel}
+                      normalizedEntries={normalizedEntriesByMessageId[message.id]}
                     />
                   ))}
                   {isTyping && <Ui6TypingIndicator assistantLabel={assistantLabel} />}

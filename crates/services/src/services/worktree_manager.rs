@@ -55,6 +55,49 @@ pub enum WorktreeError {
 pub struct WorktreeManager;
 
 impl WorktreeManager {
+    fn canonicalize_for_compare(path: &Path) -> PathBuf {
+        let normalized = normalize_macos_private_alias(path);
+        if normalized.is_absolute() {
+            dunce::canonicalize(&normalized).unwrap_or(normalized)
+        } else {
+            let absolute = std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("/"))
+                .join(normalized);
+            dunce::canonicalize(&absolute).unwrap_or(absolute)
+        }
+    }
+
+    fn ensure_not_main_repo_path(
+        git_repo_path: &Path,
+        worktree_path: &Path,
+    ) -> Result<(), WorktreeError> {
+        let repo_path = Self::canonicalize_for_compare(git_repo_path);
+        let worktree_path = Self::canonicalize_for_compare(worktree_path);
+
+        if repo_path == worktree_path {
+            return Err(WorktreeError::InvalidPath(format!(
+                "Refusing to operate on main repository path as worktree: {}",
+                worktree_path.display()
+            )));
+        }
+
+        Ok(())
+    }
+
+    fn ensure_removable_worktree_path(path: &Path) -> Result<(), WorktreeError> {
+        let candidate = Self::canonicalize_for_compare(path);
+        let git_marker = candidate.join(".git");
+
+        if git_marker.is_dir() {
+            return Err(WorktreeError::InvalidPath(format!(
+                "Refusing to remove repository working tree directory: {}",
+                candidate.display()
+            )));
+        }
+
+        Ok(())
+    }
+
     pub fn set_workspace_dir_override(path: PathBuf) {
         let _ = WORKSPACE_DIR_OVERRIDE.set(path);
     }
@@ -97,6 +140,8 @@ impl WorktreeManager {
         branch_name: &str,
         worktree_path: &Path,
     ) -> Result<(), WorktreeError> {
+        Self::ensure_not_main_repo_path(repo_path, worktree_path)?;
+
         let path_str = worktree_path.to_string_lossy().to_string();
 
         // Get or create a lock for this specific worktree path
@@ -128,6 +173,8 @@ impl WorktreeManager {
         branch_name: &str,
         worktree_path: &Path,
     ) -> Result<(), WorktreeError> {
+        Self::ensure_not_main_repo_path(repo_path, worktree_path)?;
+
         let path_str = worktree_path.to_string_lossy().to_string();
         let branch_name_owned = branch_name.to_string();
         let worktree_path_owned = worktree_path.to_path_buf();
@@ -164,6 +211,8 @@ impl WorktreeManager {
         repo_path: &Path,
         worktree_path: &Path,
     ) -> Result<bool, WorktreeError> {
+        Self::ensure_not_main_repo_path(repo_path, worktree_path)?;
+
         let repo_path = repo_path.to_path_buf();
         let worktree_path = worktree_path.to_path_buf();
 
@@ -245,6 +294,8 @@ impl WorktreeManager {
         debug!("Performing cleanup for worktree: {worktree_display_name}");
 
         let git_repo_path = Self::get_git_repo_path(repo)?;
+        Self::ensure_not_main_repo_path(&git_repo_path, worktree_path)?;
+        Self::ensure_removable_worktree_path(worktree_path)?;
 
         // Step 1: Use GitService to remove the worktree registration (force) if present
         // The Git CLI is more robust than libgit2 for mutable worktree operations
@@ -353,6 +404,8 @@ impl WorktreeManager {
                     // Clean up physical directory if it exists
                     // Needed if previous attempt failed after directory creation
                     if worktree_path.exists() {
+                        Self::ensure_not_main_repo_path(&git_repo_path, &worktree_path)?;
+                        Self::ensure_removable_worktree_path(&worktree_path)?;
                         std::fs::remove_dir_all(&worktree_path).map_err(WorktreeError::Io)?;
                     }
                     if let Err(e2) = git_service.add_worktree(
@@ -452,6 +505,7 @@ impl WorktreeManager {
         };
 
         if let Some(repo_path) = resolved_repo_path {
+            Self::ensure_not_main_repo_path(&repo_path, &worktree.worktree_path)?;
             Self::comprehensive_worktree_cleanup_async(&repo_path, &worktree.worktree_path).await?;
         } else {
             // Can't determine repo path, just clean up the worktree directory
@@ -502,6 +556,7 @@ impl WorktreeManager {
 
         tokio::task::spawn_blocking(move || -> Result<(), WorktreeError> {
             if worktree_path_owned.exists() {
+                Self::ensure_removable_worktree_path(&worktree_path_owned)?;
                 std::fs::remove_dir_all(&worktree_path_owned).map_err(WorktreeError::Io)?;
                 info!(
                     "Removed worktree directory: {}",
