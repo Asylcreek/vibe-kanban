@@ -298,7 +298,7 @@ function Ui6ChatInput({
 
   return (
     <div className="w-full">
-      <div className="flex flex-col rounded-lg border border-[#333333] bg-[#1a1a1a] transition-colors focus-within:border-[#444444]">
+      <div className="flex flex-col rounded-lg border border-gb-medium-gray bg-gb-bg transition-colors focus-within:border-gb-comment">
         <textarea
           value={message}
           onChange={(event) => setMessage(event.target.value)}
@@ -309,21 +309,21 @@ function Ui6ChatInput({
             }
           }}
           placeholder="Ask for follow-up changes"
-          className="min-h-[110px] max-h-[220px] w-full resize-none overflow-y-auto border-0 bg-transparent px-4 pt-4 text-sm text-[#e5e5e5] placeholder:text-[#666666] outline-none"
+          className="min-h-[110px] max-h-[220px] w-full resize-none overflow-y-auto border-0 bg-transparent px-4 pt-4 text-sm text-gb-fg placeholder:text-gb-medium-gray outline-none"
           disabled={disabled}
         />
 
-        <div className="flex flex-shrink-0 items-center justify-between border-t border-[#2a2a2a] px-3 py-2">
+        <div className="flex flex-shrink-0 items-center justify-between border-t border-gb-bg-dark px-3 py-2">
           <div className="flex items-center gap-1">
             <button
               type="button"
-              className="flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-[#999999] transition-colors hover:bg-[#2a2a2a]"
+              className="flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-gb-dark-gray transition-colors hover:bg-gb-bg-light"
               aria-label="Add attachments"
             >
               <Plus className="h-4 w-4" />
             </button>
 
-            <label className="flex h-8 min-w-[120px] items-center gap-1 rounded px-2 text-sm text-[#e5e5e5] transition-colors hover:bg-[#2a2a2a]">
+            <label className="flex h-8 min-w-[120px] items-center gap-1 rounded px-2 text-sm text-gb-fg transition-colors hover:bg-gb-bg-light">
               <select
                 value={selectedExecutor ?? ''}
                 onChange={(event) =>
@@ -338,10 +338,10 @@ function Ui6ChatInput({
                   </option>
                 ))}
               </select>
-              <ChevronDown className="h-3 w-3 text-[#888888]" />
+              <ChevronDown className="h-3 w-3 text-gb-comment" />
             </label>
 
-            <label className="flex h-8 min-w-[72px] items-center gap-1 rounded px-2 text-sm text-[#e5e5e5] transition-colors hover:bg-[#2a2a2a]">
+            <label className="flex h-8 min-w-[72px] items-center gap-1 rounded px-2 text-sm text-gb-fg transition-colors hover:bg-gb-bg-light">
               <select
                 value={selectedVariant ?? ''}
                 onChange={(event) =>
@@ -356,14 +356,14 @@ function Ui6ChatInput({
                   </option>
                 ))}
               </select>
-              <ChevronDown className="h-3 w-3 text-[#888888]" />
+              <ChevronDown className="h-3 w-3 text-gb-comment" />
             </label>
           </div>
 
           <div className="flex items-center gap-1">
             <button
               type="button"
-              className="flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-[#999999] transition-colors hover:bg-[#2a2a2a]"
+              className="flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-gb-dark-gray transition-colors hover:bg-gb-bg-light"
               aria-label="Voice input"
             >
               <Mic className="h-4 w-4" />
@@ -373,13 +373,13 @@ function Ui6ChatInput({
               type="button"
               onClick={handleSubmit}
               disabled={canStop ? false : !message.trim() || disabled}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-[#666666] p-0 transition-colors hover:bg-[#777777] disabled:opacity-30 disabled:hover:bg-[#666666]"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-gb-bright-yellow p-0 transition-colors hover:bg-gb-soft-yellow disabled:opacity-30 disabled:hover:bg-gb-bright-yellow"
               aria-label={canStop ? 'Stop' : 'Send message'}
             >
               {canStop ? (
-                <Square className="h-4 w-4 text-white" fill="white" />
+                <Square className="h-4 w-4 text-gb-dark0" fill="currentColor" />
               ) : (
-                <ArrowUp className="h-4 w-4 text-black" />
+                <ArrowUp className="h-4 w-4 text-gb-dark0" />
               )}
             </button>
           </div>
@@ -408,27 +408,27 @@ function Ui6ChatMessage({
   return (
     <div
       className={`px-6 py-6 transition-colors ${
-        message.isUser ? 'bg-[#0d0d0d]' : 'bg-[#111111] hover:bg-[#171717]'
+        message.isUser ? 'bg-gb-dark0' : 'bg-gb-dark hover:bg-gb-bg'
       }`}
     >
       <div className="flex max-w-none gap-4">
-        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-orange-600 text-white">
+        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gb-orange to-gb-red text-white">
           {message.isUser ? <User className="h-4 w-4" /> : assistantBadge}
         </div>
 
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex items-center gap-2">
-            <span className="text-sm font-medium text-[#e5e5e5]">
+            <span className="text-sm font-medium text-gb-fg">
               {message.isUser ? 'You' : assistantLabel}
             </span>
-            <span className="text-xs text-[#8c8c8c]">
+            <span className="text-xs text-gb-comment">
               {message.timestamp.toLocaleTimeString([], {
                 hour: '2-digit',
                 minute: '2-digit',
               })}
             </span>
           </div>
-          <div className="whitespace-pre-wrap break-words text-[#d6d6d6] leading-relaxed">
+          <div className="whitespace-pre-wrap break-words text-gb-gray leading-relaxed">
             {message.isUser ? (
               message.text
             ) : showNormalized ? (
@@ -446,7 +446,7 @@ function Ui6ChatMessage({
               <WYSIWYGEditor
                 value={message.text}
                 disabled
-                className="min-h-0 bg-transparent p-0 text-[#d6d6d6] [&_p]:mb-2 [&_p:last-child]:mb-0"
+                className="min-h-0 bg-transparent p-0 text-gb-gray [&_p]:mb-2 [&_p:last-child]:mb-0"
               />
             )}
           </div>
@@ -459,23 +459,23 @@ function Ui6ChatMessage({
 function Ui6TypingIndicator({ assistantLabel }: { assistantLabel: string }) {
   const assistantBadge = assistantInitial(assistantLabel);
   return (
-    <div className="bg-[#111111] px-6 py-6">
+    <div className="bg-gb-dark px-6 py-6">
       <div className="flex max-w-none gap-4">
-        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-orange-600 text-white">
+        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gb-orange to-gb-red text-white">
           {assistantBadge}
         </div>
 
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex items-center gap-2">
-            <span className="text-sm font-medium text-[#e5e5e5]">
+            <span className="text-sm font-medium text-gb-fg">
               {assistantLabel}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex space-x-1">
-              <div className="h-2 w-2 animate-bounce rounded-full bg-[#777777] [animation-delay:-0.3s]" />
-              <div className="h-2 w-2 animate-bounce rounded-full bg-[#777777] [animation-delay:-0.15s]" />
-              <div className="h-2 w-2 animate-bounce rounded-full bg-[#777777]" />
+              <div className="h-2 w-2 animate-bounce rounded-full bg-gb-comment [animation-delay:-0.3s]" />
+              <div className="h-2 w-2 animate-bounce rounded-full bg-gb-comment [animation-delay:-0.15s]" />
+              <div className="h-2 w-2 animate-bounce rounded-full bg-gb-comment" />
             </div>
           </div>
         </div>
@@ -522,56 +522,56 @@ function Ui6Welcome({
   const workingDir = activeProjectRepoPath || '~';
 
   return (
-    <div className="flex h-full flex-col bg-[#0a0a0a]">
+    <div className="flex h-full flex-col bg-gb-dark0">
       <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-6">
         <div className="font-mono">
-          <div className="mb-8 overflow-hidden rounded border border-[#1a1a1a] bg-[#0f0f0f] p-6 shadow-2xl">
-            <div className="mb-6 flex items-center gap-2 border-b border-[#1a1a1a] pb-3">
-              <div className="h-3 w-3 rounded-full bg-[#ff5f56]" />
-              <div className="h-3 w-3 rounded-full bg-[#ffbd2e]" />
-              <div className="h-3 w-3 rounded-full bg-[#27ca40]" />
-              <span className="ml-2 text-xs text-[#666666]">terminal</span>
+          <div className="mb-8 overflow-hidden rounded border border-gb-bg-dark bg-gb-dark p-6 shadow-2xl">
+            <div className="mb-6 flex items-center gap-2 border-b border-gb-bg-dark pb-3">
+              <div className="h-3 w-3 rounded-full bg-gb-red" />
+              <div className="h-3 w-3 rounded-full bg-gb-bright-yellow" />
+              <div className="h-3 w-3 rounded-full bg-gb-soft-green" />
+              <span className="ml-2 text-xs text-gb-comment">terminal</span>
             </div>
 
             <div className="space-y-3">
-              <p className="text-sm text-[#e5e5e5] leading-relaxed">
+              <p className="text-sm text-gb-fg leading-relaxed">
                 You are standing in an open terminal. An AI awaits your
                 commands.
               </p>
 
-              <div className="mt-6 space-y-2 rounded bg-[#1a1a1a] p-4">
+              <div className="mt-6 space-y-2 rounded bg-gb-bg-dark p-4">
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="text-[#27ca40]">➜</span>
-                  <span className="text-[#6699ff]">~</span>
-                  <span className="text-[#e5e5e5]">cat instructions.txt</span>
+                  <span className="text-gb-soft-green">➜</span>
+                  <span className="text-gb-light-blue">~</span>
+                  <span className="text-gb-fg">cat instructions.txt</span>
                 </div>
 
-                <div className="ml-4 border-l-2 border-[#333333] pl-3 text-xs text-[#b8b8b8]">
+                <div className="ml-4 border-l-2 border-gb-medium-gray pl-3 text-xs text-gb-gray">
                   <p className="mb-1">
-                    <span className="text-[#ff79c6]">ENTER</span> to send
+                    <span className="text-gb-orange">ENTER</span> to send
                   </p>
                   <p className="mb-1">
-                    <span className="text-[#ff79c6]">Shift + Enter</span> for a
+                    <span className="text-gb-orange">Shift + Enter</span> for a
                     new line
                   </p>
                   <p className="mb-3">
-                    <span className="text-[#ff79c6]">@</span> to mention files
+                    <span className="text-gb-bright-yellow">@</span> to mention files
                   </p>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center justify-center gap-6 text-xs text-[#555555]">
+          <div className="flex items-center justify-center gap-6 text-xs text-gb-medium-gray">
             <div className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-[#ffbd2e]" />
-              <span className="font-mono text-[#8be9fd]">{workingDir}</span>
+              <div className="h-2 w-2 rounded-full bg-gb-soft-yellow" />
+              <span className="font-mono text-gb-light-blue">{workingDir}</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="flex-shrink-0 border-t border-[#1a1a1a] bg-[#0d0d0d] px-6 py-4">
+      <div className="flex-shrink-0 border-t border-gb-bg-dark bg-gb-dark0 px-6 py-4">
         <div className="mx-auto max-w-4xl">
           <Ui6ChatInput
             onSendMessage={onSendMessage}
@@ -618,8 +618,8 @@ function Ui6ExecutionBar({
 
   return (
     <>
-      <div className="mt-3 flex items-center justify-between px-1 py-1 text-xs text-[#a1a1a1]">
-        <label className="flex items-center gap-1 rounded px-1.5 py-1 text-sm text-[#e5e5e5] transition-colors hover:bg-[#2a2a2a]">
+      <div className="mt-3 flex items-center justify-between px-1 py-1 text-xs text-gb-comment">
+        <label className="flex items-center gap-1 rounded px-1.5 py-1 text-sm text-gb-fg transition-colors hover:bg-gb-bg-light">
           <select
             value={currentMode}
             onChange={(event) =>
@@ -640,7 +640,7 @@ function Ui6ExecutionBar({
         </div>
       </div>
       {modeError ? (
-        <p className="mt-1 text-xs text-[#ff8f8f]">{modeError}</p>
+        <p className="mt-1 text-xs text-gb-error-red">{modeError}</p>
       ) : null}
     </>
   );
@@ -691,7 +691,7 @@ function Ui6RightSidebar({
       />
 
       <aside
-        className={`fixed right-0 top-0 z-50 flex h-screen flex-col border-l border-[#333333] bg-[#0d0d0d] md:relative md:z-auto ${
+        className={`fixed right-0 top-0 z-50 flex h-screen flex-col border-l border-gb-medium-gray bg-gb-dark0 md:relative md:z-auto ${
           isMobile ? 'w-80' : ''
         }`}
         style={!isMobile ? { width: `${width}px` } : undefined}
@@ -702,18 +702,18 @@ function Ui6RightSidebar({
             aria-label="Resize right sidebar"
             aria-orientation="vertical"
             onPointerDown={onResizeStart}
-            className="absolute left-0 top-0 h-full w-1 -translate-x-1/2 cursor-col-resize bg-transparent transition-colors hover:bg-[#525252]"
+            className="absolute left-0 top-0 h-full w-1 -translate-x-1/2 cursor-col-resize bg-transparent transition-colors hover:bg-gb-dark-gray"
           />
         )}
-        <div className="flex items-center justify-between border-b border-[#333333] px-4 py-3">
+        <div className="flex items-center justify-between border-b border-gb-medium-gray px-4 py-3">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setActiveTab('changes')}
               className={`rounded-none border-b-2 pb-1 text-sm ${
                 activeTab === 'changes'
-                  ? 'border-[#e5e5e5] text-[#e5e5e5]'
-                  : 'border-transparent text-[#999999]'
+                  ? 'border-gb-gray text-gb-fg'
+                  : 'border-transparent text-gb-dark-gray'
               }`}
             >
               Changes
@@ -723,8 +723,8 @@ function Ui6RightSidebar({
               onClick={() => setActiveTab('files')}
               className={`rounded-none border-b-2 pb-1 text-sm ${
                 activeTab === 'files'
-                  ? 'border-[#e5e5e5] text-[#e5e5e5]'
-                  : 'border-transparent text-[#999999]'
+                  ? 'border-[#e5e5e5] text-gb-fg'
+                  : 'border-transparent text-gb-dark-gray'
               }`}
             >
               Files
@@ -733,7 +733,7 @@ function Ui6RightSidebar({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded text-[#999999] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
+            className="flex h-8 w-8 items-center justify-center rounded text-gb-dark-gray transition-colors hover:bg-gb-bg-light hover:text-gb-fg"
           >
             <X className="h-4 w-4" />
           </button>
@@ -743,8 +743,8 @@ function Ui6RightSidebar({
           {activeTab === 'changes' ? (
             <div className="space-y-0">
               {onRefreshDiffs && (
-                <div className="flex items-center justify-between px-4 py-2 border-b border-[#333333] sticky top-0 bg-[#0d0d0d] z-10">
-                  <div className="flex items-center gap-2 text-xs text-[#777777]">
+                <div className="flex items-center justify-between px-4 py-2 border-b border-gb-medium-gray sticky top-0 bg-gb-dark0 z-10">
+                  <div className="flex items-center gap-2 text-xs text-gb-medium-gray">
                     <span>
                       {diffs.length} {diffs.length === 1 ? 'file' : 'files'}{' '}
                       changed
@@ -771,7 +771,7 @@ function Ui6RightSidebar({
                   <button
                     type="button"
                     onClick={onRefreshDiffs}
-                    className="flex h-6 w-6 items-center justify-center rounded text-[#999999] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
+                    className="flex h-6 w-6 items-center justify-center rounded text-gb-dark-gray transition-colors hover:bg-gb-bg-light hover:text-gb-fg"
                     title="Refresh changes"
                   >
                     <RefreshCw className="h-3.5 w-3.5" />
@@ -779,7 +779,7 @@ function Ui6RightSidebar({
                 </div>
               )}
               {diffs.length === 0 ? (
-                <div className="px-4 py-8 text-sm text-[#777777]">
+                <div className="px-4 py-8 text-sm text-gb-medium-gray">
                   No changes
                 </div>
               ) : (
@@ -804,10 +804,10 @@ function Ui6RightSidebar({
                   <button
                     type="button"
                     key={file.id}
-                    className="flex w-full items-center gap-2 rounded p-2 text-left transition-colors hover:bg-[#1a1a1a]"
+                    className="flex w-full items-center gap-2 rounded p-2 text-left transition-colors hover:bg-gb-bg-dark"
                   >
-                    <Icon className="h-4 w-4 flex-shrink-0 text-[#999999]" />
-                    <span className="truncate text-sm text-[#e5e5e5]">
+                    <Icon className="h-4 w-4 flex-shrink-0 text-gb-dark-gray" />
+                    <span className="truncate text-sm text-gb-fg">
                       {file.name}
                     </span>
                   </button>
@@ -2013,8 +2013,8 @@ export function Ui6ChatbotPage() {
   };
 
   return (
-    <div className="new-design h-screen w-full">
-      <div className="relative flex h-screen w-full overflow-hidden bg-[#0d0d0d]">
+    <div className="new-design gruvbox-baby h-screen w-full">
+      <div className="relative flex h-screen w-full overflow-hidden">
         {isMobile && (isLeftSidebarOpen || isRightSidebarOpen) && (
           <button
             type="button"
@@ -2029,7 +2029,7 @@ export function Ui6ChatbotPage() {
 
         <aside
           className={`
-            z-40 h-screen flex-shrink-0 border-r border-[#2a2a2a] bg-[#171717]
+            z-40 h-screen flex-shrink-0 border-r border-gb-bg-dark bg-gb-dark
             transition-transform duration-200 md:relative md:translate-x-0
             ${isMobile ? 'fixed left-0 top-0 w-64' : ''}
             ${isLeftSidebarOpen ? 'translate-x-0' : '-translate-x-full md:hidden'}
@@ -2044,7 +2044,7 @@ export function Ui6ChatbotPage() {
                 void handleCreateThread(activeProjectId);
                 if (isMobile) setIsLeftSidebarOpen(false);
               }}
-              className="flex h-9 w-full items-center justify-start rounded bg-transparent px-3 text-sm font-normal text-[#e5e5e5] transition-colors hover:bg-[#2a2a2a]"
+              className="flex h-9 w-full items-center justify-start rounded bg-transparent px-3 text-sm font-normal text-gb-fg transition-colors hover:bg-gb-bg-light"
             >
               <Plus className="mr-2 h-4 w-4" />
               New thread
@@ -2052,7 +2052,7 @@ export function Ui6ChatbotPage() {
 
             <button
               type="button"
-              className="flex h-9 w-full items-center justify-start rounded px-3 text-sm font-normal text-[#a1a1a1] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
+              className="flex h-9 w-full items-center justify-start rounded px-3 text-sm font-normal text-gb-comment transition-colors hover:bg-gb-bg-light hover:text-gb-fg"
             >
               <Zap className="mr-2 h-4 w-4" />
               Automations
@@ -2060,7 +2060,7 @@ export function Ui6ChatbotPage() {
 
             <button
               type="button"
-              className="flex h-9 w-full items-center justify-start rounded px-3 text-sm font-normal text-[#a1a1a1] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
+              className="flex h-9 w-full items-center justify-start rounded px-3 text-sm font-normal text-gb-comment transition-colors hover:bg-gb-bg-light hover:text-gb-fg"
             >
               <Grid3X3 className="mr-2 h-4 w-4" />
               Skills
@@ -2072,7 +2072,7 @@ export function Ui6ChatbotPage() {
               <button
                 type="button"
                 onClick={() => setIsThreadsExpanded((prev) => !prev)}
-                className="flex min-w-0 flex-1 items-center gap-2 rounded px-1.5 py-1 text-xs font-medium text-[#999999] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
+                className="flex min-w-0 flex-1 items-center gap-2 rounded px-1.5 py-1 text-xs font-medium text-gb-dark-gray transition-colors hover:bg-gb-bg-light hover:text-gb-fg"
               >
                 {isThreadsExpanded ? (
                   <ChevronDown className="h-3 w-3 flex-shrink-0" />
@@ -2085,7 +2085,7 @@ export function Ui6ChatbotPage() {
               <button
                 type="button"
                 onClick={openCreateProjectModal}
-                className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-[#999999] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
+                className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-gb-dark-gray transition-colors hover:bg-gb-bg-light hover:text-gb-fg"
                 aria-label="Open create project form"
                 title="Create project"
               >
@@ -2096,15 +2096,15 @@ export function Ui6ChatbotPage() {
             {isThreadsExpanded && (
               <div className="mt-1 space-y-0.5">
                 {isLoadingProjects ? (
-                  <p className="px-2 py-1.5 text-xs text-[#777777]">
+                  <p className="px-2 py-1.5 text-xs text-gb-medium-gray">
                     Loading projects...
                   </p>
                 ) : projectsError ? (
-                  <p className="px-2 py-1.5 text-xs text-[#ff8f8f]">
+                  <p className="px-2 py-1.5 text-xs text-gb-error-red">
                     {projectsError}
                   </p>
                 ) : projects.length === 0 ? (
-                  <p className="px-2 py-1.5 text-xs text-[#777777]">
+                  <p className="px-2 py-1.5 text-xs text-gb-medium-gray">
                     No projects
                   </p>
                 ) : (
@@ -2115,8 +2115,8 @@ export function Ui6ChatbotPage() {
                     return (
                       <div key={project.id}>
                         <div
-                          className={`group relative flex w-full items-center gap-1 rounded transition-colors hover:bg-[#2a2a2a] ${
-                            activeProjectId === project.id ? 'bg-[#222222]' : ''
+                          className={`group relative flex w-full items-center gap-1 rounded transition-colors hover:bg-gb-bg-light ${
+                            activeProjectId === project.id ? 'bg-gb-bg-dark' : ''
                           }`}
                         >
                           <button
@@ -2127,8 +2127,8 @@ export function Ui6ChatbotPage() {
                             }}
                             className={`flex min-w-0 flex-1 items-center gap-2 rounded px-2 py-1.5 text-left text-sm ${
                               activeProjectId === project.id
-                                ? 'text-[#f5f5f5]'
-                                : 'text-[#e5e5e5]'
+                                ? 'text-gb-fg'
+                                : 'text-gb-fg'
                             }`}
                           >
                             {isExpanded ? (
@@ -2149,7 +2149,7 @@ export function Ui6ChatbotPage() {
                                 prev === project.id ? null : project.id
                               );
                             }}
-                            className="pointer-events-none mr-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-[#a1a1a1] opacity-0 transition-all hover:bg-[#343434] hover:text-[#f5f5f5] group-hover:pointer-events-auto group-hover:opacity-100 focus:pointer-events-auto focus:opacity-100 focus:outline-none"
+                            className="pointer-events-none mr-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-gb-comment opacity-0 transition-all hover:bg-gb-bg hover:text-gb-fg group-hover:pointer-events-auto group-hover:opacity-100 focus:pointer-events-auto focus:opacity-100 focus:outline-none"
                             aria-label={`Options for ${project.name}`}
                             title={`Options for ${project.name}`}
                             data-project-options-root="true"
@@ -2159,7 +2159,7 @@ export function Ui6ChatbotPage() {
 
                           {openProjectOptionsId === project.id && (
                             <div
-                              className="absolute right-8 top-8 z-30 min-w-[180px] rounded-md border border-[#2f2f2f] bg-[#141414] p-1 shadow-[0_12px_30px_rgba(0,0,0,0.45)]"
+                              className="absolute right-8 top-8 z-30 min-w-[180px] rounded-md border border-gb-bg-light bg-gb-dark0 p-1 shadow-[0_12px_30px_rgba(0,0,0,0.45)]"
                               data-project-options-root="true"
                             >
                               <button
@@ -2168,7 +2168,7 @@ export function Ui6ChatbotPage() {
                                   event.stopPropagation();
                                   openDeleteProjectModal(project);
                                 }}
-                                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-[#ff9a9a] transition-colors hover:bg-[#2a1b1b] hover:text-[#ffd1d1]"
+                                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-gb-red transition-colors hover:bg-gb-bg-dark hover:text-[#ffd1d1]"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                                 Delete project
@@ -2183,7 +2183,7 @@ export function Ui6ChatbotPage() {
                               setActiveProjectId(project.id);
                               void handleCreateThread(project.id);
                             }}
-                            className="pointer-events-none mr-1 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-[#a1a1a1] opacity-0 transition-all hover:bg-[#343434] hover:text-[#f5f5f5] group-hover:pointer-events-auto group-hover:opacity-100 focus:pointer-events-auto focus:opacity-100 focus:outline-none"
+                            className="pointer-events-none mr-1 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-gb-comment opacity-0 transition-all hover:bg-gb-bg hover:text-gb-fg group-hover:pointer-events-auto group-hover:opacity-100 focus:pointer-events-auto focus:opacity-100 focus:outline-none"
                             aria-label={`Create thread in ${project.name}`}
                             title={`Create thread in ${project.name}`}
                           >
@@ -2194,14 +2194,14 @@ export function Ui6ChatbotPage() {
                         {isExpanded && (
                           <div className="ml-4 mt-0.5 space-y-0.5">
                             {projectThreads.length === 0 ? (
-                              <p className="rounded px-2 py-1.5 text-xs text-[#777777]">
+                              <p className="rounded px-2 py-1.5 text-xs text-gb-medium-gray">
                                 No threads
                               </p>
                             ) : (
                               projectThreads.map((thread) => (
                                 <div
                                   key={thread.id}
-                                  className="group flex w-full items-center rounded transition-colors hover:bg-[#2a2a2a]"
+                                  className="group flex w-full items-center rounded transition-colors hover:bg-gb-bg-light"
                                 >
                                   <button
                                     type="button"
@@ -2209,7 +2209,7 @@ export function Ui6ChatbotPage() {
                                       handleOpenThread(project.id, thread);
                                       if (isMobile) setIsLeftSidebarOpen(false);
                                     }}
-                                    className="flex min-w-0 flex-1 items-center rounded px-2 py-1.5 text-left text-sm text-[#a1a1a1] transition-colors hover:text-[#e5e5e5]"
+                                    className="flex min-w-0 flex-1 items-center rounded px-2 py-1.5 text-left text-sm text-gb-comment transition-colors hover:text-gb-fg"
                                   >
                                     <span className="truncate">
                                       {thread.title}
@@ -2226,7 +2226,7 @@ export function Ui6ChatbotPage() {
                                         title: thread.title,
                                       });
                                     }}
-                                    className="pointer-events-none mr-1 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-[#999999] opacity-0 transition-all hover:bg-[#343434] hover:text-[#f5f5f5] group-hover:pointer-events-auto group-hover:opacity-100 focus:pointer-events-auto focus:opacity-100 focus:outline-none"
+                                    className="pointer-events-none mr-1 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-gb-dark-gray opacity-0 transition-all hover:bg-gb-bg hover:text-gb-fg group-hover:pointer-events-auto group-hover:opacity-100 focus:pointer-events-auto focus:opacity-100 focus:outline-none"
                                     aria-label={`Rename ${thread.title}`}
                                     title="Rename thread"
                                   >
@@ -2245,10 +2245,10 @@ export function Ui6ChatbotPage() {
             )}
           </div>
 
-          <div className="border-t border-[#2a2a2a] p-3">
+          <div className="border-t border-gb-bg-dark p-3">
             <button
               type="button"
-              className="flex h-9 w-full items-center justify-start rounded px-3 text-sm font-normal text-[#a1a1a1] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
+              className="flex h-9 w-full items-center justify-start rounded px-3 text-sm font-normal text-gb-comment transition-colors hover:bg-gb-bg-light hover:text-gb-fg"
             >
               <Settings className="mr-2 h-4 w-4" />
               Settings
@@ -2267,11 +2267,11 @@ export function Ui6ChatbotPage() {
         )}
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="z-10 flex flex-shrink-0 items-center gap-2 border-b border-[#1a1a1a] bg-[#0d0d0d] px-4 py-3">
+          <div className="z-10 flex flex-shrink-0 items-center gap-2 border-b border-gb-bg-dark bg-gb-dark0 px-4 py-3">
             <button
               type="button"
               onClick={() => setIsLeftSidebarOpen((prev) => !prev)}
-              className="flex h-8 w-8 items-center justify-center rounded p-0 text-[#999999] transition-colors hover:bg-[#2a2a2a]"
+              className="flex h-8 w-8 items-center justify-center rounded p-0 text-gb-dark-gray transition-colors hover:bg-gb-bg-light"
             >
               <Menu className="h-4 w-4" />
             </button>
@@ -2279,13 +2279,13 @@ export function Ui6ChatbotPage() {
             <div className="min-w-0 flex-1">
               {currentChat && (
                 <div className="flex min-w-0 items-center gap-1">
-                  <h1 className="truncate text-sm font-medium text-[#e5e5e5]">
+                  <h1 className="truncate text-sm font-medium text-gb-fg">
                     {currentChat.title}
                   </h1>
                   <button
                     type="button"
                     onClick={startTitleEdit}
-                    className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-[#999999] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
+                    className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-gb-dark-gray transition-colors hover:bg-gb-bg-light hover:text-gb-fg"
                     aria-label="Edit thread title"
                     title="Edit thread title"
                   >
@@ -2298,8 +2298,8 @@ export function Ui6ChatbotPage() {
             <button
               type="button"
               onClick={() => setIsRightSidebarOpen((prev) => !prev)}
-              className={`ml-auto flex h-8 w-8 items-center justify-center rounded text-[#999999] transition-colors hover:bg-[#2a2a2a] ${
-                isRightSidebarOpen ? 'bg-[#2a2a2a]' : ''
+              className={`ml-auto flex h-8 w-8 items-center justify-center rounded text-gb-dark-gray transition-colors hover:bg-gb-bg-light ${
+                isRightSidebarOpen ? 'bg-gb-bg-light' : ''
               }`}
             >
               <PanelRightOpen className="h-4 w-4" />
@@ -2307,7 +2307,7 @@ export function Ui6ChatbotPage() {
           </div>
 
           {currentChat && currentChat.messages.length > 0 ? (
-            <div className="flex h-full min-h-0 flex-col bg-[#0d0d0d]">
+            <div className="flex h-full min-h-0 flex-col bg-gb-dark0">
               <div
                 ref={messageScrollRef}
                 className="min-h-0 flex-1 overflow-y-auto"
@@ -2404,11 +2404,11 @@ export function Ui6ChatbotPage() {
               role="dialog"
               aria-modal="true"
               aria-label="Create Project"
-              className="fixed left-1/2 top-1/2 z-[60] w-[min(760px,94vw)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2e2e2e] bg-[#121212] shadow-[0_28px_80px_rgba(0,0,0,0.7)]"
+              className="fixed left-1/2 top-1/2 z-[60] w-[min(760px,94vw)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2e2e2e] bg-gb-dark shadow-[0_28px_80px_rgba(0,0,0,0.7)]"
             >
-              <div className="flex items-center justify-between border-b border-[#242424] px-5 py-4">
+              <div className="flex items-center justify-between border-b border-gb-bg-dark px-5 py-4">
                 <div>
-                  <h2 className="text-base font-medium text-[#ececec]">
+                  <h2 className="text-base font-medium text-gb-gray">
                     Create Project
                   </h2>
                 </div>
@@ -2416,7 +2416,7 @@ export function Ui6ChatbotPage() {
                 <button
                   type="button"
                   onClick={closeCreateProjectModal}
-                  className="flex h-8 w-8 items-center justify-center rounded text-[#999999] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
+                  className="flex h-8 w-8 items-center justify-center rounded text-gb-dark-gray transition-colors hover:bg-gb-bg-light hover:text-gb-fg"
                   aria-label="Close"
                 >
                   <X className="h-4 w-4" />
@@ -2425,7 +2425,7 @@ export function Ui6ChatbotPage() {
 
               <div className="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-4">
                 <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-[#d9d9d9]">
+                  <label className="block text-sm font-medium text-gb-gray">
                     Name
                   </label>
                   <input
@@ -2435,12 +2435,12 @@ export function Ui6ChatbotPage() {
                       setCreateProjectName(event.target.value)
                     }
                     placeholder="My project"
-                    className="h-10 w-full rounded-md border border-[#303030] bg-[#1a1a1a] px-3 text-sm text-[#e5e5e5] outline-none transition-colors placeholder:text-[#666666] focus:border-[#4a4a4a]"
+                    className="h-10 w-full rounded-md border border-gb-medium-gray bg-gb-bg-dark px-3 text-sm text-gb-fg outline-none transition-colors placeholder:text-gb-medium-gray focus:border-gb-comment"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-[#d9d9d9]">
+                  <label className="block text-sm font-medium text-gb-gray">
                     Repo path
                   </label>
                   <div className="flex gap-2">
@@ -2451,12 +2451,12 @@ export function Ui6ChatbotPage() {
                         setCreateProjectRepoPath(event.target.value)
                       }
                       placeholder="/Users/you/projects/vibe-kanban"
-                      className="h-10 flex-1 rounded-md border border-[#303030] bg-[#1a1a1a] px-3 text-sm text-[#e5e5e5] outline-none transition-colors placeholder:text-[#666666] focus:border-[#4a4a4a]"
+                      className="h-10 flex-1 rounded-md border border-gb-medium-gray bg-gb-bg-dark px-3 text-sm text-gb-fg outline-none transition-colors placeholder:text-gb-medium-gray focus:border-gb-comment"
                     />
                     <button
                       type="button"
                       onClick={() => void selectRepoFolder()}
-                      className="inline-flex h-10 items-center rounded-md border border-[#343434] px-3 text-sm text-[#cfcfcf] transition-colors hover:bg-[#232323]"
+                      className="inline-flex h-10 items-center rounded-md border border-gb-medium-gray px-3 text-sm text-gb-fg transition-colors hover:bg-gb-bg-dark"
                     >
                       Select folder
                     </button>
@@ -2469,17 +2469,17 @@ export function Ui6ChatbotPage() {
                 </div>
 
                 {createProjectMessage && (
-                  <p className="text-sm text-[#ff8f8f]">
+                  <p className="text-sm text-gb-error-red">
                     {createProjectMessage}
                   </p>
                 )}
               </div>
 
-              <div className="flex items-center justify-end gap-2 border-t border-[#242424] px-5 py-4">
+              <div className="flex items-center justify-end gap-2 border-t border-gb-bg-dark px-5 py-4">
                 <button
                   type="button"
                   onClick={closeCreateProjectModal}
-                  className="inline-flex h-9 items-center rounded-md border border-[#343434] px-3 text-sm text-[#c9c9c9] transition-colors hover:bg-[#232323]"
+                  className="inline-flex h-9 items-center rounded-md border border-gb-medium-gray px-3 text-sm text-gb-fg transition-colors hover:bg-gb-bg-dark"
                 >
                   Cancel
                 </button>
@@ -2487,7 +2487,7 @@ export function Ui6ChatbotPage() {
                   type="button"
                   onClick={() => void handleCreateProject()}
                   disabled={isCreatingProject}
-                  className="inline-flex h-9 items-center rounded-md bg-[#ececec] px-3 text-sm font-medium text-[#121212] transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                  className="inline-flex h-9 items-center rounded-md bg-gb-bright-yellow px-3 text-sm font-medium text-[#121212] transition-colors hover:bg-gb-soft-yellow disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {isCreatingProject ? 'Creating...' : 'Create project'}
                 </button>
@@ -2509,16 +2509,16 @@ export function Ui6ChatbotPage() {
               role="dialog"
               aria-modal="true"
               aria-label="Delete Project"
-              className="fixed left-1/2 top-1/2 z-[60] w-[min(560px,94vw)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2e2e2e] bg-[#121212] shadow-[0_28px_80px_rgba(0,0,0,0.7)]"
+              className="fixed left-1/2 top-1/2 z-[60] w-[min(560px,94vw)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2e2e2e] bg-gb-dark shadow-[0_28px_80px_rgba(0,0,0,0.7)]"
             >
-              <div className="flex items-center justify-between border-b border-[#242424] px-5 py-4">
-                <h2 className="text-base font-medium text-[#ececec]">
+              <div className="flex items-center justify-between border-b border-gb-bg-dark px-5 py-4">
+                <h2 className="text-base font-medium text-gb-gray">
                   Delete Project
                 </h2>
                 <button
                   type="button"
                   onClick={closeDeleteProjectModal}
-                  className="flex h-8 w-8 items-center justify-center rounded text-[#999999] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
+                  className="flex h-8 w-8 items-center justify-center rounded text-gb-dark-gray transition-colors hover:bg-gb-bg-light hover:text-gb-fg"
                   aria-label="Close delete project confirmation"
                 >
                   <X className="h-4 w-4" />
@@ -2533,20 +2533,20 @@ export function Ui6ChatbotPage() {
                   </span>{' '}
                   and all its threads.
                 </p>
-                <p className="text-xs text-[#ff9a9a]">
+                <p className="text-xs text-gb-red">
                   This action is destructive and cannot be undone.
                 </p>
                 {deleteProjectError && (
-                  <p className="text-xs text-[#ff8f8f]">{deleteProjectError}</p>
+                  <p className="text-xs text-gb-error-red">{deleteProjectError}</p>
                 )}
               </div>
 
-              <div className="flex items-center justify-end gap-2 border-t border-[#242424] px-5 py-4">
+              <div className="flex items-center justify-end gap-2 border-t border-gb-bg-dark px-5 py-4">
                 <button
                   type="button"
                   onClick={closeDeleteProjectModal}
                   disabled={isDeletingProject}
-                  className="inline-flex h-9 items-center rounded-md border border-[#343434] px-3 text-sm text-[#c9c9c9] transition-colors hover:bg-[#232323] disabled:cursor-not-allowed disabled:opacity-70"
+                  className="inline-flex h-9 items-center rounded-md border border-gb-medium-gray px-3 text-sm text-gb-fg transition-colors hover:bg-gb-bg-dark disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   Cancel
                 </button>
@@ -2576,16 +2576,16 @@ export function Ui6ChatbotPage() {
               role="dialog"
               aria-modal="true"
               aria-label="Rename Thread"
-              className="fixed left-1/2 top-1/2 z-[60] w-[min(520px,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2e2e2e] bg-[#121212] shadow-[0_28px_80px_rgba(0,0,0,0.7)]"
+              className="fixed left-1/2 top-1/2 z-[60] w-[min(520px,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2e2e2e] bg-gb-dark shadow-[0_28px_80px_rgba(0,0,0,0.7)]"
             >
-              <div className="flex items-center justify-between border-b border-[#242424] px-5 py-4">
-                <h2 className="text-base font-medium text-[#ececec]">
+              <div className="flex items-center justify-between border-b border-gb-bg-dark px-5 py-4">
+                <h2 className="text-base font-medium text-gb-gray">
                   Rename Thread
                 </h2>
                 <button
                   type="button"
                   onClick={cancelTitleEdit}
-                  className="flex h-8 w-8 items-center justify-center rounded text-[#999999] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
+                  className="flex h-8 w-8 items-center justify-center rounded text-gb-dark-gray transition-colors hover:bg-gb-bg-light hover:text-gb-fg"
                   aria-label="Close rename thread dialog"
                 >
                   <X className="h-4 w-4" />
@@ -2593,7 +2593,7 @@ export function Ui6ChatbotPage() {
               </div>
 
               <div className="space-y-2 px-5 py-4">
-                <label className="block text-sm font-medium text-[#d9d9d9]">
+                <label className="block text-sm font-medium text-gb-gray">
                   Thread title
                 </label>
                 <input
@@ -2610,19 +2610,19 @@ export function Ui6ChatbotPage() {
                   }}
                   autoFocus
                   disabled={isSavingTitle}
-                  className="h-10 w-full rounded-md border border-[#303030] bg-[#1a1a1a] px-3 text-sm text-[#e5e5e5] outline-none transition-colors placeholder:text-[#666666] focus:border-[#4a4a4a]"
+                  className="h-10 w-full rounded-md border border-gb-medium-gray bg-gb-bg-dark px-3 text-sm text-gb-fg outline-none transition-colors placeholder:text-gb-medium-gray focus:border-gb-comment"
                 />
                 {titleEditError && (
-                  <p className="text-xs text-[#ff8f8f]">{titleEditError}</p>
+                  <p className="text-xs text-gb-error-red">{titleEditError}</p>
                 )}
               </div>
 
-              <div className="flex items-center justify-end gap-2 border-t border-[#242424] px-5 py-4">
+              <div className="flex items-center justify-end gap-2 border-t border-gb-bg-dark px-5 py-4">
                 <button
                   type="button"
                   onClick={cancelTitleEdit}
                   disabled={isSavingTitle}
-                  className="inline-flex h-9 items-center rounded-md border border-[#343434] px-3 text-sm text-[#c9c9c9] transition-colors hover:bg-[#232323] disabled:cursor-not-allowed disabled:opacity-70"
+                  className="inline-flex h-9 items-center rounded-md border border-gb-medium-gray px-3 text-sm text-gb-fg transition-colors hover:bg-gb-bg-dark disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   Cancel
                 </button>
@@ -2630,7 +2630,7 @@ export function Ui6ChatbotPage() {
                   type="button"
                   onClick={() => void saveTitleEdit()}
                   disabled={isSavingTitle}
-                  className="inline-flex h-9 items-center rounded-md bg-[#ececec] px-3 text-sm font-medium text-[#121212] transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                  className="inline-flex h-9 items-center rounded-md bg-gb-bright-yellow px-3 text-sm font-medium text-[#121212] transition-colors hover:bg-gb-soft-yellow disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {isSavingTitle ? 'Saving...' : 'Save'}
                 </button>

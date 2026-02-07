@@ -156,6 +156,108 @@
     --_syntax-punctuation: #c9d1d9;
     --_syntax-deleted: #ffdcd7;
   }
+
+  /* Gruvbox Baby theme - Medium/Dark Intensity */
+  /* https://github.com/luisiacc/gruvbox-baby */
+  .new-design.gruvbox-baby {
+    color-scheme: dark;
+
+    /* Gruvbox Baby colors */
+    --gb-dark0: #0d0e0f;
+    --gb-dark: #202020;
+    --gb-bg-dark: #242424;
+    --gb-bg: #282828;
+    --gb-bg-light: #32302f;
+    --gb-fg: #ebdbb2;
+    --gb-gray: #dedede;
+    --gb-medium-gray: #504945;
+    --gb-comment: #665c54;
+    --gb-error-red: #cc241d;
+    --gb-red: #fb4934;
+    --gb-orange: #d65d0e;
+    --gb-bright-yellow: #fabd2f;
+    --gb-soft-yellow: #eebd35;
+    --gb-pink: #d4879c;
+    --gb-magenta: #b16286;
+    --gb-soft-green: #98971a;
+    --gb-forest-green: #689d6a;
+    --gb-clean-green: #8ec07c;
+    --gb-blue-gray: #458588;
+    --gb-dark-gray: #83a598;
+    --gb-light-blue: #7fa2ac;
+
+    /* Internal variables (Gruvbox) */
+    --_background: 0 0% 5%;
+    --_foreground: 25 40% 90%;
+    --_primary: 25 40% 90%;
+    --_primary-foreground: 0 0% 8%;
+    --_secondary: 20 15% 15%;
+    --_secondary-foreground: 25 40% 85%;
+    --_muted: 20 15% 20%;
+    --_muted-foreground: 25 15% 60%;
+    --_accent: 25 30% 25%;
+    --_accent-foreground: 25 40% 90%;
+    --_destructive: 0 60% 50%;
+    --_destructive-foreground: 25 40% 95%;
+    --_border: 20 15% 20%;
+    --_input: 20 15% 20%;
+    --_ring: 25 82% 54%;
+    --_radius: 0.125rem;
+
+    /* Status (Gruvbox) */
+    --_success: 90 45% 55%;
+    --_success-foreground: 90 45% 20%;
+    --_warning: 40 95% 55%;
+    --_warning-foreground: 40 95% 15%;
+    --_info: 190 50% 55%;
+    --_info-foreground: 190 50% 90%;
+    --_neutral: 20 15% 20%;
+    --_neutral-foreground: 25 40% 90%;
+
+    /* Text (Gruvbox) */
+    --text-high: 25 40% 92%;
+    --text-normal: 25 35% 80%;
+    --text-low: 25 20% 50%;
+
+    /* Background (Gruvbox) */
+    --_bg-primary-default: 0 0% 5%;
+    --_bg-secondary-default: 20 15% 8%;
+    --_bg-panel-default: 20 15% 16%;
+    --bg-primary: var(--vscode-editor-background, var(--_bg-primary-default));
+    --bg-secondary: var(
+      --vscode-editorWidget-background,
+      var(--_bg-secondary-default)
+    );
+    --bg-panel: var(--vscode-input-background, var(--_bg-panel-default));
+
+    /* Accent (Gruvbox) */
+    --brand: 25 82% 54%;
+    --brand-hover: 25 75% 62%;
+    --brand-secondary: 25 82% 37%;
+    --error: 0 60% 50%;
+    --success: 90 45% 55%;
+    --merged: 271 81% 66%;
+
+    /* Text on accent */
+    --text-on-brand: 0 0% 100%;
+
+    /* Console (Gruvbox) */
+    --_console-background: 0 0% 5%;
+    --_console-foreground: 25 40% 92%;
+    --_console-success: 90 45% 55%;
+    --_console-error: 0 60% 50%;
+
+    /* Syntax highlighting (Gruvbox) */
+    --_syntax-keyword: #fb4934;
+    --_syntax-function: #fabd2f;
+    --_syntax-constant: #83a598;
+    --_syntax-string: #b8bb26;
+    --_syntax-variable: #fe8019;
+    --_syntax-comment: #928374;
+    --_syntax-tag: #8ec07c;
+    --_syntax-punctuation: #ebdbb2;
+    --_syntax-deleted: #fb4934;
+  }
 }
 
 /* 2) PUBLIC TOKENS scoped to .new-design */

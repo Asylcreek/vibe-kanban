@@ -58,3 +58,9 @@ Do not manually edit shared/types.ts, instead edit crates/server/src/bin/generat
 - Worktree isolation must be opt-in per thread (not default).
 - Do not show “create workspace first” errors in `/new-ui`.
 - Prefer adding dedicated `/new-ui` thread APIs and execution routing instead of forcing legacy task/workspace UX into `/new-ui`.
+
+## /new-ui Theme
+- `/new-ui` uses **Gruvbox Baby** theme (warm retro-groove color scheme)
+- Use `gruvbox-baby` class on `.new-design` containers
+- Color utilities: `bg-gb-dark0`, `text-gb-fg`, `bg-gb-bright-yellow`, `text-gb-orange`, etc.
+- Theme config in `frontend/tailwind.new.config.js` and `frontend/src/styles/new/index.css`
