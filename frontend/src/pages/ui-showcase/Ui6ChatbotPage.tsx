@@ -742,38 +742,36 @@ function Ui6RightSidebar({
           />
         )}
         <div className="flex items-center justify-between border-b border-[#333333] px-4 py-3">
-          <h2 className="font-medium text-[#e5e5e5]">Details</h2>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('changes')}
+              className={`rounded-none border-b-2 pb-1 text-sm ${
+                activeTab === 'changes'
+                  ? 'border-[#e5e5e5] text-[#e5e5e5]'
+                  : 'border-transparent text-[#999999]'
+              }`}
+            >
+              Changes
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('files')}
+              className={`rounded-none border-b-2 pb-1 text-sm ${
+                activeTab === 'files'
+                  ? 'border-[#e5e5e5] text-[#e5e5e5]'
+                  : 'border-transparent text-[#999999]'
+              }`}
+            >
+              Files
+            </button>
+          </div>
           <button
             type="button"
             onClick={onClose}
             className="flex h-8 w-8 items-center justify-center rounded text-[#999999] transition-colors hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
           >
             <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="flex h-12 items-center justify-start gap-2 border-b border-[#333333] px-4">
-          <button
-            type="button"
-            onClick={() => setActiveTab('changes')}
-            className={`rounded-none border-b-2 pb-1 text-sm ${
-              activeTab === 'changes'
-                ? 'border-[#e5e5e5] text-[#e5e5e5]'
-                : 'border-transparent text-[#999999]'
-            }`}
-          >
-            Changes
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('files')}
-            className={`rounded-none border-b-2 pb-1 text-sm ${
-              activeTab === 'files'
-                ? 'border-[#e5e5e5] text-[#e5e5e5]'
-                : 'border-transparent text-[#999999]'
-            }`}
-          >
-            Files
           </button>
         </div>
 
