@@ -232,6 +232,14 @@ pub trait ContainerService {
             return;
         }
 
+        // /new-ui uses internal tasks for execution plumbing; do not emit OS-level
+        // completion notifications for these internal task titles.
+        if ctx.task.title.starts_with("[new-ui shared]")
+            || ctx.task.title.starts_with("[new-ui thread]")
+        {
+            return;
+        }
+
         let title = format!("Task Complete: {}", ctx.task.title);
         let message = match ctx.execution_process.status {
             ExecutionProcessStatus::Completed => format!(
