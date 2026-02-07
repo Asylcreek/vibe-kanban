@@ -701,15 +701,9 @@ function Ui6RightSidebar({
   onRefreshDiffs?: () => void;
   repoId: string | null;
 }) {
-  const [activeTab, setActiveTab] = useState<'artifacts' | 'files' | 'changes'>('artifacts');
+  const [activeTab, setActiveTab] = useState<'files' | 'changes'>('changes');
 
   if (!isOpen) return null;
-
-  const artifacts = [
-    { id: 'a-1', name: 'React Component', type: 'code', icon: Code2 },
-    { id: 'a-2', name: 'API Documentation', type: 'document', icon: FileText },
-    { id: 'a-3', name: 'Database Schema', type: 'code', icon: FileCode },
-  ];
 
   const files = [
     { id: 'f-1', name: 'integrations', icon: File },
@@ -769,17 +763,6 @@ function Ui6RightSidebar({
             }`}
           >
             Changes
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('artifacts')}
-            className={`rounded-none border-b-2 pb-1 text-sm ${
-              activeTab === 'artifacts'
-                ? 'border-[#e5e5e5] text-[#e5e5e5]'
-                : 'border-transparent text-[#999999]'
-            }`}
-          >
-            Artifacts
           </button>
           <button
             type="button"
