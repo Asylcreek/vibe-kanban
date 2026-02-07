@@ -4,26 +4,19 @@ import {
   ArrowUp,
   ChevronDown,
   ChevronRight,
-  Code,
-  Code2,
   File,
   FileCode,
   FileText,
   GitBranch as GitBranchIcon,
   Grid3X3,
-  GraduationCap,
   Menu,
   Mic,
   MoreHorizontal,
   PanelRightOpen,
-  PenTool,
   Pencil,
   Plus,
-  Search,
   Settings,
-  Sparkles,
   Square,
-  Target,
   Trash2,
   User,
   X,
@@ -507,6 +500,7 @@ function Ui6Welcome({
   onStop,
   canStop,
   disabled,
+  activeProjectRepoPath,
 }: {
   onSendMessage: (message: string) => void;
   selectedExecutor: BaseCodingAgent | null;
@@ -523,87 +517,57 @@ function Ui6Welcome({
   onStop: () => void;
   canStop: boolean;
   disabled?: boolean;
+  activeProjectRepoPath: string | null;
 }) {
-  const actions = [
-    {
-      icon: Code,
-      label: 'Code',
-      className: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-    },
-    {
-      icon: PenTool,
-      label: 'Write',
-      className: 'bg-green-500/10 text-green-400 border-green-500/20',
-    },
-    {
-      icon: Target,
-      label: 'Strategize',
-      className: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-    },
-    {
-      icon: GraduationCap,
-      label: 'Learn',
-      className: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
-    },
-    {
-      icon: Grid3X3,
-      label: 'From your apps',
-      className: 'bg-pink-500/10 text-pink-400 border-pink-500/20',
-    },
-  ];
+  const workingDir = activeProjectRepoPath || '~';
 
   return (
-    <div className="flex h-full flex-col bg-[#0d0d0d]">
-      <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center px-8">
-        <div className="mb-12 text-center">
-          <div className="mb-2 flex items-center justify-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-orange-600">
-              <Sparkles className="h-5 w-5 text-white" />
+    <div className="flex h-full flex-col bg-[#0a0a0a]">
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-6">
+        <div className="font-mono">
+          <div className="mb-8 overflow-hidden rounded border border-[#1a1a1a] bg-[#0f0f0f] p-6 shadow-2xl">
+            <div className="mb-6 flex items-center gap-2 border-b border-[#1a1a1a] pb-3">
+              <div className="h-3 w-3 rounded-full bg-[#ff5f56]" />
+              <div className="h-3 w-3 rounded-full bg-[#ffbd2e]" />
+              <div className="h-3 w-3 rounded-full bg-[#27ca40]" />
+              <span className="ml-2 text-xs text-[#666666]">terminal</span>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-sm text-[#e5e5e5] leading-relaxed">
+                You are standing in an open terminal. An AI awaits your
+                commands.
+              </p>
+
+              <div className="mt-6 space-y-2 rounded bg-[#1a1a1a] p-4">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-[#27ca40]">➜</span>
+                  <span className="text-[#6699ff]">~</span>
+                  <span className="text-[#e5e5e5]">cat instructions.txt</span>
+                </div>
+
+                <div className="ml-4 border-l-2 border-[#333333] pl-3 text-xs text-[#b8b8b8]">
+                  <p className="mb-1">
+                    <span className="text-[#ff79c6]">ENTER</span> to send
+                  </p>
+                  <p className="mb-1">
+                    <span className="text-[#ff79c6]">Shift + Enter</span> for a
+                    new line
+                  </p>
+                  <p className="mb-3">
+                    <span className="text-[#ff79c6]">@</span> to mention files
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
-          <h1 className="mb-1 text-2xl text-[#e5e5e5]">
-            What&apos;s new, Esmondrio?
-          </h1>
-          <p className="text-sm text-[#999999]">
-            Start a conversation or try one of the suggestions below
-          </p>
-        </div>
 
-        <div className="flex flex-wrap justify-center gap-2">
-          <button
-            type="button"
-            className="inline-flex h-8 items-center rounded-md border border-gray-500/20 bg-gray-500/10 px-3 text-sm text-gray-400 transition-colors hover:bg-gray-500/20"
-          >
-            <Search className="mr-2 h-4 w-4" />
-            Research
-          </button>
-
-          <button
-            type="button"
-            className="inline-flex h-8 items-center rounded-md border border-blue-500/20 bg-blue-500/10 px-3 text-sm text-blue-400 transition-colors hover:bg-blue-500/20"
-          >
-            Claude Sonnet 4
-            <span className="ml-2 rounded bg-orange-500 px-1.5 py-0.5 text-xs text-white">
-              1
-            </span>
-          </button>
-
-          {actions.map((action) => {
-            const Icon = action.icon;
-            return (
-              <button
-                key={action.label}
-                type="button"
-                className={`inline-flex h-8 items-center rounded-md border px-3 text-sm transition-opacity hover:opacity-80 ${action.className}`}
-                onClick={() =>
-                  onSendMessage(`Help me with ${action.label.toLowerCase()}`)
-                }
-              >
-                <Icon className="mr-2 h-4 w-4" />
-                {action.label}
-              </button>
-            );
-          })}
+          <div className="flex items-center justify-center gap-6 text-xs text-[#555555]">
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-[#ffbd2e]" />
+              <span className="font-mono text-[#8be9fd]">{workingDir}</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -782,15 +746,24 @@ function Ui6RightSidebar({
                 <div className="flex items-center justify-between px-4 py-2 border-b border-[#333333] sticky top-0 bg-[#0d0d0d] z-10">
                   <div className="flex items-center gap-2 text-xs text-[#777777]">
                     <span>
-                      {diffs.length} {diffs.length === 1 ? 'file' : 'files'} changed
+                      {diffs.length} {diffs.length === 1 ? 'file' : 'files'}{' '}
+                      changed
                     </span>
                     {diffs.length > 0 && (
                       <>
                         <span className="text-green-600 dark:text-green-500">
-                          +{diffs.reduce((sum, d) => sum + (d.additions ?? 0), 0)}
+                          +
+                          {diffs.reduce(
+                            (sum, d) => sum + (d.additions ?? 0),
+                            0
+                          )}
                         </span>
                         <span className="text-red-600 dark:text-red-500">
-                          -{diffs.reduce((sum, d) => sum + (d.deletions ?? 0), 0)}
+                          -
+                          {diffs.reduce(
+                            (sum, d) => sum + (d.deletions ?? 0),
+                            0
+                          )}
                         </span>
                       </>
                     )}
@@ -822,31 +795,6 @@ function Ui6RightSidebar({
                   ))}
                 </ReviewProvider>
               )}
-            </div>
-          ) : activeTab === 'artifacts' ? (
-            <div className="space-y-2">
-              {artifacts.map((artifact) => {
-                const Icon = artifact.icon;
-                return (
-                  <button
-                    type="button"
-                    key={artifact.id}
-                    className="flex w-full items-center gap-3 rounded-lg p-3 text-left transition-colors hover:bg-[#1a1a1a]"
-                  >
-                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded bg-[#1a1a1a]">
-                      <Icon className="h-4 w-4 text-[#e5e5e5]" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-[#e5e5e5]">
-                        {artifact.name}
-                      </p>
-                      <p className="text-xs capitalize text-[#999999]">
-                        {artifact.type}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
             </div>
           ) : (
             <div className="space-y-1">
@@ -1022,20 +970,28 @@ export function Ui6ChatbotPage() {
     }
   }, [isMobile]);
 
-  // Get the active project's repo ID for diffs
-  const [activeProjectRepoId, setActiveProjectRepoId] = useState<string | null>(null);
+  // Get the active project's repo ID and path for diffs
+  const [activeProjectRepoId, setActiveProjectRepoId] = useState<string | null>(
+    null
+  );
+  const [activeProjectRepoPath, setActiveProjectRepoPath] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     const loadRepoId = async () => {
       if (!activeProjectId) {
         setActiveProjectRepoId(null);
+        setActiveProjectRepoPath(null);
         return;
       }
       try {
         const repos = await projectsApi.getRepositories(activeProjectId);
         setActiveProjectRepoId(repos[0]?.id ?? null);
+        setActiveProjectRepoPath(repos[0]?.path ?? null);
       } catch {
         setActiveProjectRepoId(null);
+        setActiveProjectRepoPath(null);
       }
     };
     void loadRepoId();
@@ -2419,6 +2375,7 @@ export function Ui6ChatbotPage() {
               onStop={handleStopExecution}
               canStop={canStopExecution}
               disabled={isTyping}
+              activeProjectRepoPath={activeProjectRepoPath}
             />
           )}
         </div>
