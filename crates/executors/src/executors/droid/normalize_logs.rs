@@ -641,14 +641,7 @@ pub fn normalize_logs(
                     }
                 }
 
-                DroidJson::Completion { final_text, .. } => {
-                    let entry = NormalizedEntry {
-                        timestamp: None,
-                        entry_type: NormalizedEntryType::AssistantMessage,
-                        content: final_text.clone(),
-                        metadata: None,
-                    };
-                    add_normalized_entry(&msg_store, &entry_index_provider, entry);
+                DroidJson::Completion { .. } => {
                     sent_completion = true;
                 }
 
